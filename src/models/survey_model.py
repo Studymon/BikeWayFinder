@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.models import resnet50, ResNet50_Weights
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 #################################
@@ -23,9 +24,9 @@ import torch.optim as optim
 #################################
 cwd = Path(os.getcwd())
 BASE_DIR = cwd.parent.parent
-SURVEY_DIR = os.path.join(BASE_DIR, r'src\data\survey.csv')
-REF_DIR = os.path.join(BASE_DIR, r'src\data\sampled_edges.csv')
-IMAGE_DIR = os.path.join(BASE_DIR, r'src\data\survey_edges')
+SURVEY_DIR = os.path.join(BASE_DIR, 'src', 'data', 'survey.csv')
+REF_DIR = os.path.join(BASE_DIR, 'src', 'data', 'sampled_edges.csv')
+IMAGE_DIR = os.path.join(BASE_DIR, 'src', 'data', 'survey_edges')
 
 #################################
 ## DATA PREPROCESSING
@@ -296,13 +297,19 @@ def epoch_time(start_time, end_time):
 #################################
 
 optimizer = optim.Adam(model.parameters(), lr=LR)
-criterion = nn.MSELoss()
-
-criterion = criterion.to(DEVICE)
+criterion = nn.MSELoss().to(DEVICE)
 model = model.to(DEVICE)
 
-# Training the model
+# Initialize the ReduceLROnPlateau learning rate scheduler
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=4, verbose=True)
+
+# Continue with the early stopping parameters
 best_valid_loss = float('inf')
+patience = 8
+patience_counter = 0
+
+training_loss = []
+validation_loss = []
 
 for epoch in trange(NUM_EPOCHS, desc="Epochs"):
     start_time = time.monotonic()
@@ -310,17 +317,30 @@ for epoch in trange(NUM_EPOCHS, desc="Epochs"):
     train_loss = train(model, train_loader, optimizer, criterion, DEVICE)
     valid_loss, valid_predictions, valid_actuals = evaluate(model, valid_loader, criterion, DEVICE)
 
+    training_loss.append(train_loss)
+    validation_loss.append(valid_loss)
+
+    # Scheduler step with validation loss for ReduceLROnPlateau
+    scheduler.step(valid_loss)
+
     if valid_loss < best_valid_loss:
         best_valid_loss = valid_loss
         torch.save(model.state_dict(), 'survey_model.pt')
+        patience_counter = 0
+        print(f"Validation loss decreased to {valid_loss:.3f}, saving model")
+    else:
+        patience_counter += 1
+        print(f"Patience counter: {patience_counter}")
+        if patience_counter >= patience:
+            print("Early stopping triggered")
+            break
 
     end_time = time.monotonic()
 
     epoch_mins, epoch_secs = epoch_time(start_time, end_time)
 
     print(f'Epoch: {epoch+1:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\tTrain Loss: {train_loss:.3f}')
-    print(f'\t Val. Loss: {valid_loss:.3f}')
+    print(f'\tTrain Loss: {train_loss:.3f} | \tVal. Loss: {valid_loss:.3f}')
     
     
     
@@ -333,9 +353,27 @@ model.to(DEVICE)
 
 # Testing on unseen data
 test_loss, test_predictions, test_actuals = evaluate(model, test_loader, criterion, DEVICE)
-print(f'\t Test Loss: {valid_loss:.3f}')
+print(f'\t Test Loss: {test_loss:.3f}')
 
 temp = pd.DataFrame({
     'Predicted': test_predictions,
     'Actual': test_actuals
 })
+
+
+
+#################################
+## CALCULATING SCORES FOR UNSEEN DATA
+#################################
+
+# Unseen data dir
+UNSEEN_DIR = os.path.join(BASE_DIR, 'src', 'data', 'edges')
+
+# Define the transformations
+test_transform = transforms.Compose([transforms.Resize(size=IMG_SIZE),
+                                     transforms.ToTensor(),
+                                     transforms.Normalize(mean=MEAN, std=STD)
+                                     ])
+
+# Instantiate the datasets
+test_dataset = SurveyDataset(data=test_data, img_dir=IMAGE_DIR, transform=test_transform)
