@@ -7,6 +7,7 @@ from PIL import Image
 import random
 from tqdm import tqdm, trange
 import time
+import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 
@@ -85,6 +86,10 @@ scores['image'] = scores['image'].str.split('_').str[-1]
 
 base_scores = pd.merge(ref, scores, left_on='survey_id', right_on='image', how='left')
 base_scores = base_scores.drop('image', axis=1)
+
+# Sanity check
+base_scores.loc[base_scores['mean'].idxmax()]
+base_scores.loc[base_scores['mean'].idxmin()]
 
 
 
@@ -369,11 +374,73 @@ temp = pd.DataFrame({
 # Unseen data dir
 UNSEEN_DIR = os.path.join(BASE_DIR, 'src', 'data', 'edges')
 
+# Define dataset class
+class UnseenDataset(Dataset):
+    def __init__(self, img_dir, transform=None):
+        self.img_dir = img_dir
+        self.transform = transform
+        # List all image files in the img_dir
+        self.image_files = [f for f in os.listdir(img_dir) if os.path.isfile(os.path.join(img_dir, f))]
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, idx):
+        img_name = os.path.join(self.img_dir, self.image_files[idx])
+        image = Image.open(img_name).convert('RGB')
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image, self.image_files[idx]
+
 # Define the transformations
-test_transform = transforms.Compose([transforms.Resize(size=IMG_SIZE),
-                                     transforms.ToTensor(),
-                                     transforms.Normalize(mean=MEAN, std=STD)
-                                     ])
+unseen_transform = transforms.Compose([transforms.Resize(size=IMG_SIZE),
+                                       transforms.ToTensor(),
+                                       transforms.Normalize(mean=MEAN, std=STD)
+                                       ])
 
 # Instantiate the datasets
-test_dataset = SurveyDataset(data=test_data, img_dir=IMAGE_DIR, transform=test_transform)
+unseen_dataset = UnseenDataset(img_dir=UNSEEN_DIR, transform=unseen_transform)
+loader = DataLoader(unseen_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+# Load saved model
+model = resnet50(weights=ResNet50_Weights.DEFAULT)
+in_features = model.fc.in_features
+final_fc = nn.Linear(in_features, NUM_CLASSES)
+model.fc = final_fc
+model.load_state_dict(torch.load('survey_model.pt'))
+model.to(DEVICE)
+
+# Use model to predict scores on unseen data
+model.eval()
+
+predictions = []
+filenames = []
+
+with torch.no_grad():
+    for images, files in tqdm(loader, desc='Predicting'):
+        images = images.to(DEVICE)
+        outputs = model(images)
+        predictions.extend(outputs.cpu().numpy())
+        filenames.extend(files)
+        
+        
+results = pd.DataFrame({
+    'Filename': filenames,
+    'Prediction': [pred[0] for pred in predictions]
+})
+
+# Histogram of the predictions
+plt.hist(results['Prediction'], bins=20, edgecolor='black', alpha=0.7)
+plt.title('Histogram of Predictions')
+plt.xlabel('Predictions')
+plt.ylabel('Frequency')
+plt.show()
+
+# Save the predictions to a csv file
+results.to_csv('unseen_predictions.csv', index=False)
+
+# Sanity check
+results.loc[results['Prediction'].idxmax()]
+results.loc[results['Prediction'].idxmin()]
