@@ -157,7 +157,7 @@ LR = 3e-5  # Already trained model --> smaller learning rate
 NUM_EPOCHS = 15
 
 IMG_SIZE = (224, 224)
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
@@ -262,6 +262,9 @@ def train(model, loader, optimizer, criterion, device):
 def evaluate(model, loader, criterion, device):
     model.eval()
     epoch_loss = 0.0
+    
+    predictions = []  # Collect predictions
+    actuals = []  # Collect actual labels
 
     with torch.no_grad():
         for images, labels in tqdm(loader, desc='Evaluation'):
@@ -270,10 +273,15 @@ def evaluate(model, loader, criterion, device):
 
             outputs = model(images)
             loss = criterion(outputs, labels.unsqueeze(1).float())
-
             epoch_loss += loss.item() * images.size(0)
+            
+            predictions.extend(outputs.cpu().numpy())
+            actuals.extend(labels.cpu().numpy())
+            
+    predictions = np.array(predictions).flatten()
+    actuals = np.array(actuals).flatten()
 
-    return epoch_loss / len(loader)
+    return epoch_loss / len(loader), predictions, actuals
 
 # Function tracking epoch time
 def epoch_time(start_time, end_time):
@@ -300,7 +308,7 @@ for epoch in trange(NUM_EPOCHS, desc="Epochs"):
     start_time = time.monotonic()
 
     train_loss = train(model, train_loader, optimizer, criterion, DEVICE)
-    valid_loss = evaluate(model, valid_loader, criterion, DEVICE)
+    valid_loss, valid_predictions, valid_actuals = evaluate(model, valid_loader, criterion, DEVICE)
 
     if valid_loss < best_valid_loss:
         best_valid_loss = valid_loss
@@ -313,3 +321,21 @@ for epoch in trange(NUM_EPOCHS, desc="Epochs"):
     print(f'Epoch: {epoch+1:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
     print(f'\tTrain Loss: {train_loss:.3f}')
     print(f'\t Val. Loss: {valid_loss:.3f}')
+    
+    
+    
+#################################
+## TESTING
+#################################
+
+model.load_state_dict(torch.load('survey_model.pt'))
+model.to(DEVICE)
+
+# Testing on unseen data
+test_loss, test_predictions, test_actuals = evaluate(model, test_loader, criterion, DEVICE)
+print(f'\t Test Loss: {valid_loss:.3f}')
+
+temp = pd.DataFrame({
+    'Predicted': test_predictions,
+    'Actual': test_actuals
+})
