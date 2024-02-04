@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import os
+from pathlib import Path
 from PIL import Image
 import random
 
@@ -13,13 +14,21 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.models import resnet50, ResNet50_Weights
 
-BASE_DIR = 'c:\\Users\\Zhenzhen\\Desktop\\University\\M.Sc. Tübingen\\2023-2024 WS\\Data Science Project\\temp'
 
-df = pd.read_csv('survey.csv', sep=';')
+#################################
+## SET PATHS
+#################################
+cwd = Path(os.getcwd())
+BASE_DIR = cwd.parent.parent
+SURVEY_DIR = os.path.join(BASE_DIR, r'src\data\survey.csv')
+REF_DIR = os.path.join(BASE_DIR, r'src\data\sampled_edges.csv')
+IMAGE_DIR = os.path.join(BASE_DIR, r'src\data\survey_edges')
 
 #################################
 ## DATA PREPROCESSING
 #################################
+
+df = pd.read_csv(SURVEY_DIR, sep=';')
 
 # Define preprocessing function
 def preprocess(data):
@@ -61,7 +70,7 @@ df_new = preprocess(df)
 #################################
 ## ADD SCORES TO EACH IMAGE
 #################################
-REF_DIR = os.path.join(BASE_DIR, r'Images\sampled_edges.csv')
+
 ref = pd.read_csv(REF_DIR, sep=';', header=None)
 ref = ref.drop(ref.columns[3:8], axis=1)
 ref.columns = ['cluster_num', 'survey_id', 'image_name']
@@ -130,8 +139,6 @@ hypothesis_testing(df_new, 'commute', 'recreation')
 ## PARAMETER SETTINGS
 #################################
 
-IMAGE_DIR = os.path.join(BASE_DIR, r'Images\survey_images')
-
 SEED = 123
 random.seed(SEED)
 np.random.seed(SEED)
@@ -174,7 +181,7 @@ class SurveyDataset(Dataset):
 
     def __getitem__(self, idx):
         img_name = os.path.join(self.img_dir, self.data.iloc[idx, 2])
-        image = Image.open(img_name) #.convert('RGB')
+        image = Image.open(img_name).convert('RGB')
         label = self.data.iloc[idx]['mean']
 
         if self.transform:
