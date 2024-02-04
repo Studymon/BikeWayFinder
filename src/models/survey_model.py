@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from PIL import Image
 import random
+from tqdm import tqdm, trange
+import time
 
 from sklearn.model_selection import train_test_split
 
@@ -13,6 +15,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.models import resnet50, ResNet50_Weights
+import torch.optim as optim
 
 
 #################################
@@ -148,7 +151,7 @@ torch.backends.cudnn.deterministic = True
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-TYPE = "regression"
+# TYPE = "regression"
 NUM_CLASSES = 1
 LR = 3e-5  # Already trained model --> smaller learning rate
 NUM_EPOCHS = 15
@@ -220,5 +223,93 @@ test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, shuffle=Fa
 ## LOAD PRETRAINED MODEL
 #################################
 
+model = resnet50(weights=ResNet50_Weights.DEFAULT)
+print(model)
+
+in_features = model.fc.in_features
+
+# Redefine the final fully connected layer
+final_fc = nn.Linear(in_features, NUM_CLASSES)
+model.fc = final_fc
+print(model)
 
 
+
+#################################
+## DEFINE TRAINING AND EVALUATION FUNCTIONS
+#################################
+
+# Training loop
+def train(model, loader, optimizer, criterion, device):
+    model.train()
+    epoch_loss = 0.0
+
+    for images, labels in tqdm(loader, desc='Training'):
+        images = images.to(device)
+        labels = labels.to(device)
+
+        optimizer.zero_grad()
+        outputs = model(images)
+        loss = criterion(outputs, labels.unsqueeze(1).float())
+        loss.backward()
+        optimizer.step()
+
+        epoch_loss += loss.item() * images.size(0)
+
+    return epoch_loss / len(loader)
+
+# Evaluation loop
+def evaluate(model, loader, criterion, device):
+    model.eval()
+    epoch_loss = 0.0
+
+    with torch.no_grad():
+        for images, labels in tqdm(loader, desc='Evaluation'):
+            images = images.to(device)
+            labels = labels.to(device)
+
+            outputs = model(images)
+            loss = criterion(outputs, labels.unsqueeze(1).float())
+
+            epoch_loss += loss.item() * images.size(0)
+
+    return epoch_loss / len(loader)
+
+# Function tracking epoch time
+def epoch_time(start_time, end_time):
+    elapsed_time = end_time - start_time
+    elapsed_mins = int(elapsed_time / 60)
+    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+    return elapsed_mins, elapsed_secs
+
+
+#################################
+## TRAINING
+#################################
+
+optimizer = optim.Adam(model.parameters(), lr=LR)
+criterion = nn.MSELoss()
+
+criterion = criterion.to(DEVICE)
+model = model.to(DEVICE)
+
+# Training the model
+best_valid_loss = float('inf')
+
+for epoch in trange(NUM_EPOCHS, desc="Epochs"):
+    start_time = time.monotonic()
+
+    train_loss = train(model, train_loader, optimizer, criterion, DEVICE)
+    valid_loss = evaluate(model, valid_loader, criterion, DEVICE)
+
+    if valid_loss < best_valid_loss:
+        best_valid_loss = valid_loss
+        torch.save(model.state_dict(), 'survey_model.pt')
+
+    end_time = time.monotonic()
+
+    epoch_mins, epoch_secs = epoch_time(start_time, end_time)
+
+    print(f'Epoch: {epoch+1:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
+    print(f'\tTrain Loss: {train_loss:.3f}')
+    print(f'\t Val. Loss: {valid_loss:.3f}')
