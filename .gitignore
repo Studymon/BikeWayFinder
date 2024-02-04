@@ -90,3 +90,6 @@ target/
 
 # cache
 cache/
+
+# workspace
+*.code-workspace
