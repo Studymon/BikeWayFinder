@@ -57,8 +57,6 @@ coords['elevation_interpolated'] = griddata(coords.dropna(subset=['elevation'])[
                                             coords[['longitude', 'latitude']],
                                             method='linear')
 
-coords['elevation_interpolated'] = interpolated_elevations
-
 # Replace the NaN values in the original elevation column with the interpolated values
 coords['elevation'].fillna(coords['elevation_interpolated'], inplace=True)
 coords.drop(columns=['elevation_interpolated'], inplace=True)
