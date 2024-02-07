@@ -8,6 +8,8 @@ import random
 from tqdm import tqdm, trange
 import time
 import matplotlib.pyplot as plt
+from PIL import Image
+import math
 
 from sklearn.model_selection import train_test_split
 
@@ -372,7 +374,7 @@ temp = pd.DataFrame({
 #################################
 
 # Unseen data dir
-UNSEEN_DIR = os.path.join(BASE_DIR, 'data', 'edges')
+NEW_DIR = os.path.join(BASE_DIR, 'data', 'new_edges')
 
 # Define dataset class
 class UnseenDataset(Dataset):
@@ -401,8 +403,8 @@ unseen_transform = transforms.Compose([transforms.Resize(size=IMG_SIZE),
                                        ])
 
 # Instantiate the datasets
-unseen_dataset = UnseenDataset(img_dir=UNSEEN_DIR, transform=unseen_transform)
-loader = DataLoader(unseen_dataset, batch_size=BATCH_SIZE, shuffle=False)
+new_dataset = UnseenDataset(img_dir=NEW_DIR, transform=unseen_transform)
+new_loader = DataLoader(new_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 # Load saved model
 model = resnet50(weights=ResNet50_Weights.DEFAULT)
@@ -415,32 +417,90 @@ model.to(DEVICE)
 # Use model to predict scores on unseen data
 model.eval()
 
-predictions = []
-filenames = []
+predictions_new = []
+filenames_new = []
 
 with torch.no_grad():
-    for images, files in tqdm(loader, desc='Predicting'):
+    for images, files in tqdm(new_loader, desc='Predicting'):
         images = images.to(DEVICE)
         outputs = model(images)
-        predictions.extend(outputs.cpu().numpy())
-        filenames.extend(files)
+        predictions_new.extend(outputs.cpu().numpy())
+        filenames_new.extend(files)
         
         
-results = pd.DataFrame({
-    'Filename': filenames,
-    'Prediction': [pred[0] for pred in predictions]
+results_new = pd.DataFrame({
+    'Filename': filenames_new,
+    'Prediction': [pred[0] for pred in predictions_new]
 })
+results_new
 
 # Histogram of the predictions
-plt.hist(results['Prediction'], bins=20, edgecolor='black', alpha=0.7)
+plt.hist(results_new['Prediction'], bins=20, edgecolor='black', alpha=0.7)
 plt.title('Histogram of Predictions')
 plt.xlabel('Predictions')
 plt.ylabel('Frequency')
 plt.show()
 
-# Save the predictions to a csv file
-results.to_csv('unseen_predictions.csv', index=False)
+# Rounding below 1 values to 1 and above 5 to 5
+def custom_round(value):
+    if value < 1:
+        return 1
+    elif value > 5:
+        return 5
+    else:
+        return value
 
-# Sanity check
-results.loc[results['Prediction'].idxmax()]
-results.loc[results['Prediction'].idxmin()]
+results_new['Prediction'] = results_new['Prediction'].apply(custom_round)
+
+# Save the predictions to a csv file
+# Output directory
+OUT_DIR = os.path.join(BASE_DIR, 'src', 'data', 'new_edges_predictions.csv')
+results_new.to_csv(OUT_DIR, index=False)
+
+
+
+#################################
+## SANITY CHECK
+#################################
+
+# Plotting images with lowest scores
+filtered_rows = results_new[(results_new['Prediction'] == 1)]
+image_filenames = filtered_rows['Filename']
+
+images_per_row = 5
+
+num_images = len(image_filenames)
+num_rows = math.ceil(num_images / images_per_row)
+
+# Set up the figure size and grid layout
+plt.figure(figsize=(20, num_rows * 4))
+
+for i, filename in enumerate(image_filenames, start=1):
+    img_path = os.path.join(NEW_DIR, filename)
+    image = Image.open(img_path)
+
+    plt.subplot(num_rows, images_per_row, i)
+    plt.imshow(image)
+    plt.title(filename, fontsize=10)
+    plt.axis('off')
+
+plt.tight_layout()
+plt.show()
+
+# Plotting images with highest scores
+filtered_rows = results_new[(results_new['Prediction'] > 4.8)]
+image_filenames = filtered_rows['Filename']
+
+plt.figure(figsize=(20, num_rows * 4))
+
+for i, filename in enumerate(image_filenames, start=1):
+    img_path = os.path.join(NEW_DIR, filename)
+    image = Image.open(img_path)
+
+    plt.subplot(num_rows, images_per_row, i)
+    plt.imshow(image)
+    plt.title(filename, fontsize=10)
+    plt.axis('off')
+
+plt.tight_layout()
+plt.show()
