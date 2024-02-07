@@ -48,10 +48,10 @@ edges['midpoint'] = edges['geometry'].apply(lambda x: x.interpolate(0.5, normali
 print(f"Number of edges with null midpoint: {edges['midpoint'].isnull().sum()}")
 
 # Look at midpoints
-#fig, ax = ox.plot_graph(G, node_size=3, figsize=(60, 60),node_color='r', show=False, close=False)    
-#for i in range(0,len(edges)):
-#    ax.scatter(edges['midpoint'].iloc[i].x, edges['midpoint'].iloc[i].y, c='g', s = 1.5)    
-#plt.show() 
+fig, ax = ox.plot_graph(G, node_size=3, figsize=(60, 60),node_color='r', show=False, close=False)    
+for i in range(0,len(edges)):
+    ax.scatter(edges['midpoint'].iloc[i].x, edges['midpoint'].iloc[i].y, c='g', s = 1.5)    
+plt.show() 
 
 
 #####################
@@ -165,17 +165,17 @@ centroids_nearest_imported = pd.read_pickle(file_path_centroids)
 
 
 ## VISUALIZE CLUSTER MIDPOINTS
-#fig, ax = ox.plot_graph(G, node_size=2, figsize=(60, 60), node_color='r', show=False, close=False) 
+fig, ax = ox.plot_graph(G, node_size=2, figsize=(60, 60), node_color='r', show=False, close=False) 
 
 # Extract representative midpoints
-#representative_midpoints = [row['representative_point'] for idx, row in centroids_nearest.iterrows()]
+representative_midpoints = [row['representative_point'] for idx, row in centroids_nearest.iterrows()]
 
 # Plot each representative midpoint in green
-#for point in representative_midpoints:
-#    ax.scatter(point.x, point.y, c='green', s=2)
+for point in representative_midpoints:
+    ax.scatter(point.x, point.y, c='green', s=2)
 
 # Show the plot
-#plt.show()
+plt.show()
 
 
 #################################
@@ -507,237 +507,4 @@ image_retrieval_log_n = pd.DataFrame(image_retrieval_data_n)
 
 log_file_path_n = "./log_files/nodes_svi_retrieval_log.csv"
 image_retrieval_log_n.to_csv(log_file_path_n, index=False)
-
-
-
-
-
-#############
-#### OLD CODE
-#############
-
-#### Converting centroids_nearest to GeoDataFrame
-
-# Convert geometry columns to WKTS for export
-centroids_nearest = gpd.GeoDataFrame(centroids_nearest, geometry='centroid')  # set geometry column
-centroids_nearest["representative_point"] = centroids_nearest["representative_point"].apply(lambda x: x.wkt if x is not None else None)
-centroids_nearest["linestring"] = centroids_nearest["linestring"].apply(lambda x: x.wkt if x is not None else None)
-# Export to GeoJSON
-file_name_centroids  = f"centroids_of_clustered_edges_{place_name.split(',')[0]}"
-file_path_centroids  = os.path.join("interim", file_name_centroids )
-centroids_nearest.to_file(f"{file_path_centroids }.geojson", driver='GeoJSON')
-
-# Import
-centroids_nearest_test = gpd.read_file(f"{file_path_centroids}.geojson")        
-centroids_nearest_test["representative_point"] = centroids_nearest_test.apply(lambda x: wkt.loads(x["representative_point"]), axis=1)
-centroids_nearest_test["linestring"] = centroids_nearest_test.apply(lambda x: wkt.loads(x["linestring"]), axis=1)
-
-
-#### Experiments with unique road stretch identifiers
-
-# Create a unique identifier for each road stretch
-#def create_road_stretch_id(osmid):
-#    if isinstance(osmid, list):
-#        # Concatenate the osmid values for a unique identifier
-#        return '-'.join(map(str, osmid))
-#    else:
-#        # Use the single osmid value
-#        return str(osmid)
-
-# Apply the function to create a new 'road_stretch' column
-#edges['road_stretch'] = edges['osmid'].apply(create_road_stretch_id)
-
-## Plot the street network
-# Ensure the 'road_stretch' column is a string for consistent coloring
-#edges['road_stretch'] = edges['road_stretch'].astype(str)
-
-# Create a colormap
-#colormap = plt.cm.get_cmap('viridis', len(edges['road_stretch'].unique()))
-
-# Assign a color to each unique 'road stretch' identifier
-#edges['color'] = edges['road_stretch'].apply(lambda x: colormap(edges['road_stretch'].unique().tolist().index(x)))
-
-# Plot using GeoPandas
-#fig, ax = plt.subplots(figsize=(30, 30))
-#for color, data in edges.groupby('color'):
-#    data.plot(ax=ax, color=color, linewidth=1)
-
-# Plot the nodes as well
-#nodes.plot(ax=ax, color='red', markersize=3)
-
-#plt.show()
-
-# Initialize a DataFrame to store the representative midpoints
-#representative_midpoints = pd.DataFrame(columns=['road_stretch', 'midpoint'])
-
-# Group edges by 'road_stretch'
-#grouped = edges.groupby('road_stretch')
-
-# Set a random seed for reproducibility
-#random.seed(0)
-
-# Randomly select a midpoint from each group to represent the road stretch
-#for name, group in grouped:
-    # Select a random edge from the group
-#    random_edge = group.sample(n=1)
-    
-    # Get the midpoint of this random edge
-#    midpoint = random_edge['midpoint'].iloc[0]
-
-    # Store the road stretch and its representative midpoint
-#    representative_midpoints = representative_midpoints.append({'road_stretch': name, 'midpoint': midpoint}, ignore_index=True)
-
-# Plot the representative midpoints
-#fig, ax = ox.plot_graph(G, node_size=3, figsize=(60, 60), node_color='r', show=False, close=False)
-#for idx, row in representative_midpoints.iterrows():
-#    ax.scatter(row['midpoint'].x, row['midpoint'].y, c='g', s=1.5)
-#plt.show()
-
-# Associate Representative Midpoints with Edges
-# Create a dictionary mapping road stretches to their representative midpoints
-#rep_midpoint_dict = representative_midpoints.set_index('road_stretch')['midpoint'].to_dict()
-
-# Add a new column to 'edges' to indicate if the edge's midpoint is the representative midpoint
-#edges['is_representative'] = edges.apply(lambda row: row['midpoint'] == rep_midpoint_dict.get(row['road_stretch'], None), axis=1)
-
-
-
-#### OPTION 1: Get streetview images for all roads (not practical for large cities)
-
-# Be vary of the order of lat and lon!
-""" What is the order of latitude and longitude coordinates?
-In web mapping APIs like Google Maps, spatial coordinates are often in order of latitude then longitude.
-In spatial databases like PostGIS and SQL Server, spatial coordinates are in longitude and then latitude.
-"""
-
-# Source API key from hidden file
-
-# Define functions to calculate heading, construct URL and filename,
-# and retrieve and save the image
-def calculate_heading(linestring):
-    """Calculate heading based on LINESTRING in lon-lat coordinates."""
-    
-    # Extract the start and end points from the LINESTRING
-    start_point = linestring.coords[0]  # (lon, lat) of the start point
-    end_point = linestring.coords[-1]  # (lon, lat) of the end point
-
-    # Swap the order to (lat, lon)
-    start_latlon = (start_point[1], start_point[0])
-    end_latlon = (end_point[1], end_point[0])
-    
-    lat1, lon1 = start_latlon
-    lat2, lon2 = end_latlon
-
-    delta_lon = math.radians(lon2 - lon1)
-    lat1 = math.radians(lat1)
-    lat2 = math.radians(lat2)
-
-    x = math.sin(delta_lon) * math.cos(lat2)
-    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1) * math.cos(lat2) * math.cos(delta_lon))
-
-    initial_bearing = math.atan2(x, y)
-    initial_bearing = math.degrees(initial_bearing)
-    heading = (initial_bearing + 360) % 360  # Normalize to 0-360
-
-    return heading
-
-def construct_streetview_url(lat, lon, heading, api_key):
-    """Construct a URL for the Street View Static API."""
-    base_url = "https://maps.googleapis.com/maps/api/streetview"
-    params = f"?size=800x400&location={lat},{lon}&heading={heading}&key={api_key}"
-    return base_url + params
-
-def is_image_empty(img):
-    """Check if the image is one of those 'no image available' placeholders."""
-    threshold = 20  # threshold for standard deviation of pixel values, determined by experimentation
-    # Convert to grayscale and compute the standard deviation of pixel values
-    stdev = np.std(np.array(img.convert('L')))
-    return stdev < threshold
-
-def construct_filename(road_stretch, place_name=place_name):
-    """Construct a filename based on road stretch identifier."""
-    return f"streetview_images/{place_name.split(',')[0]}/road_stretch_{road_stretch}.jpg"
-
-def retrieve_and_save_streetview_image(url, filename):
-    """Retrieve a Street View image and save it to a file."""
-    response = requests.get(url)
-    if response.status_code == 200:
-        # Check if the response contains an actual image
-        img = Image.open(BytesIO(response.content))
-        if not is_image_empty(img):
-            img.save(filename)
-            return True
-    return False
-
-#### TEST: Get streetview images for a few roads
- 
-#import os
-os.getcwd()
-os.chdir('c:\\Users\\andre\\iCloudDrive\\Dokumente\\Master Data Science\\3. Semester (WS 23)\\DS500-Data_Science_Project\\BikeWayFinder\\data')
- 
-# Before we start, create the directory to store the images
-os.makedirs(f"streetview_images/{place_name.split(',')[0]}", exist_ok=True) 
-
-google_api_key = "test"
-API_test_edges = edges.iloc[:20]
-rate_limit_interval = 1  # seconds between requests
-
-# Track which road stretches have been processed to avoid duplicates
-processed_stretches = set()
-
-for edge_data in API_test_edges.itertuples():
-    
-    # Select current road stretch
-    road_stretch = edge_data.road_stretch
-
-    # Skip if this road stretch has already been processed or is not representative
-    if road_stretch in processed_stretches or not edge_data.is_representative:
-        continue
-
-    # Mark this road stretch as processed
-    processed_stretches.add(road_stretch)
-
-    # Extract LINESTRING from the geometry column for heading calculation
-    linestring = edge_data.geometry
-    heading = calculate_heading(linestring)
-
-    # Extract latitude and longitude from the representative midpoint
-    lon = edge_data.midpoint.x
-    lat = edge_data.midpoint.y
-
-    # Construct URL and filename
-    url = construct_streetview_url(lat, lon, heading, google_api_key)
-    filename = construct_filename(road_stretch)
-
-    # Retrieve and save the image
-    if retrieve_and_save_streetview_image(url, filename):
-        print(f"Saved image for road stretch {road_stretch}")
-    else:
-        print(f"No image available for road stretch {road_stretch}")
-
-    time.sleep(rate_limit_interval)  # rate limiting
-
-
-#### VISUALIZE CLUSTERS 2: VISUALIZATION WITH CONVEX HULLS
-
-# Initialize a GeoDataFrame to store the convex hulls
-hulls = gpd.GeoDataFrame(columns=['geometry', 'cluster'], crs=edges.crs)
-
-# Calculate convex hull for each cluster
-for cluster_id in set(edges['cluster']):
-    if cluster_id != -1:  # Exclude noise points, if any
-        # Extract points in this cluster
-        points = [point for point, cluster in zip(edges['midpoint'], edges['cluster']) if cluster == cluster_id]
-        
-        # Create a convex hull
-        if points:
-            hull = MultiPoint(points).convex_hull
-            hulls = hulls.append({'geometry': hull, 'cluster': cluster_id}, ignore_index=True)
-
-# Plotting
-fig, ax = plt.subplots(figsize=(12, 8))
-edges.plot(ax=ax, color='grey', alpha=0.5)  # Plot the edges in grey for context
-hulls.plot(ax=ax, column='cluster', cmap=colormap, norm=norm, edgecolor='black')
-
-plt.show()
 

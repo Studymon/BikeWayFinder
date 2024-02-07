@@ -1,0 +1,93 @@
+import os
+from os import path
+
+import torch
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+
+from segmentation_setup.segmentation_setup import *
+
+
+##########################################
+#### Segment images and return predictions
+##########################################
+
+# Set device
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+# Set WD
+os.chdir('C:/Data Science/Python/2024_Data_Science_Project/segmentation_cluster_test')
+
+# Set configuration
+snapshot = "wide_resnet38_deeplab_vistas.pth.tar"
+data = "sampled_edges"
+output = "sampled_edges_img_output"
+pred_output = "sampled_edges_pred_output"
+prob_output = "sampled_edges_prob_output"
+scales = "[1, 2, 2.7, 3.5]"
+do_flip = False
+output_mode = "palette"
+fusion_mode = "mean"
+world_size = 1
+rank = 0
+
+# Create model by loading a snapshot
+body, head, cls_state = load_snapshot(snapshot)
+model = SegmentationModule(body, head, 256, 65, fusion_mode)
+model.cls.load_state_dict(cls_state)
+model = model.to(device).eval()
+print(model)
+
+# Create data loader
+transformation = SegmentationTransform(
+    640,
+    (0.41738699, 0.45732192, 0.46886091),
+    (0.25685097, 0.26509955, 0.29067996),
+)
+dataset = SegmentationDataset(data, transformation)
+data_loader = DataLoader(
+    dataset,
+    batch_size=2,
+    pin_memory=True,
+    sampler=DistributedSampler(dataset, world_size, rank),
+#    num_workers=2,
+    collate_fn=segmentation_collate,
+    shuffle=False,
+)
+
+
+###########################
+#### Run image segmentation
+###########################
+
+scales = eval(scales)
+
+with torch.no_grad():
+    for batch_i, rec in enumerate(data_loader):
+        print("Testing batch [{:3d}/{:3d}]".format(batch_i + 1, len(data_loader)))
+
+        img = rec["img"].to(device)
+        probs, preds = model(img, scales, do_flip)
+
+        for i, (prob, pred) in enumerate(
+            zip(torch.unbind(probs, dim=0), torch.unbind(preds, dim=0))
+        ):
+            out_size = rec["meta"][i]["size"]
+            img_name = rec["meta"][i]["idx"]
+
+            # Save prediction image
+            prob = prob.cpu()
+            pred = pred.cpu()
+            pred_img = get_pred_image(pred, out_size, output_mode == "palette")
+            pred_img.save(path.join(output, img_name + ".png"))
+
+            # Save prediction tensor
+            pred = pred.to(torch.uint8)
+            tensor_filename = path.join(pred_output, img_name + "_pred.pt")
+            save_compressed_tensor(pred, tensor_filename)
+            
+            # Save probability tensor
+            prob = prob.to(torch.float16)
+            tensor_filename = path.join(prob_output, img_name + "_prob.pt")
+            save_compressed_tensor(prob, tensor_filename)
+            
