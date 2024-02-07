@@ -27,7 +27,7 @@ cwd = Path(os.getcwd())
 BASE_DIR = cwd.parent.parent
 SURVEY_DIR = os.path.join(BASE_DIR, 'src', 'data', 'survey.csv')
 REF_DIR = os.path.join(BASE_DIR, 'src', 'data', 'sampled_edges.csv')
-IMAGE_DIR = os.path.join(BASE_DIR, 'src', 'data', 'survey_edges')
+IMAGE_DIR = os.path.join(BASE_DIR, 'data', 'survey_edges')
 
 #################################
 ## DATA PREPROCESSING
@@ -372,7 +372,7 @@ temp = pd.DataFrame({
 #################################
 
 # Unseen data dir
-UNSEEN_DIR = os.path.join(BASE_DIR, 'src', 'data', 'edges')
+UNSEEN_DIR = os.path.join(BASE_DIR, 'data', 'edges')
 
 # Define dataset class
 class UnseenDataset(Dataset):
