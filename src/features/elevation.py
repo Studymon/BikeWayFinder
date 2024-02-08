@@ -69,3 +69,15 @@ coords.drop(columns=['elevation_interpolated'], inplace=True)
 
 # Group by edges    
 coords['elevation_gain'] = coords.groupby('u')['elevation'].transform(lambda x: x.iloc[-1] - x.iloc[0])
+
+# Keeping only elevation variables
+coords = coords[['elevation', 'elevation_gain']]
+
+
+
+##############################
+## EXPORTING DATA
+##############################
+
+OUT_DIR = os.path.join(BASE_DIR, 'data', 'elevation.csv')
+coords.to_csv(OUT_DIR, index=True)
