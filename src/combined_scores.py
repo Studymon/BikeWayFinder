@@ -1,13 +1,44 @@
 import pandas as pd
 import numpy as np
+import geopandas as gpd
 import os
 from pathlib import Path
 from shapely import wkt
 import re
+import math
 
 
 ##########################################
-## SCORE CALCULATION
+## SET PATHS
+##########################################
+
+BASE_DIR = Path(os.getcwd()).parent
+OSM_DIR = os.path.join(BASE_DIR, 'src', 'data', 'osm_features.csv')
+ELE_DIR = os.path.join(BASE_DIR, 'src', 'data', 'elevation.csv')
+
+
+
+##########################################
+## LOADING DATA
+##########################################
+
+osm = pd.read_csv(OSM_DIR)
+ele = pd.read_csv(ELE_DIR)
+
+# Merge the two dataframes
+features = pd.merge(osm, ele, on=['u', 'v', 'key'], how='left')
+
+# Transform to GeoDataFrame
+def transform(data):
+    data = gpd.GeoDataFrame(data).set_index(["u", "v", "key"])
+    data["geometry"] = data["geometry"].astype(str).apply(lambda x: wkt.loads(x))
+    data = data.set_geometry('geometry')
+    return data
+features = transform(features)
+
+
+##########################################
+## OSM FEATURES SCORING FUNCTIONS
 ##########################################
 
 # Function to calculate the raw scores from extracted features
@@ -96,40 +127,92 @@ def width_score(width):
         return 1
     else:
         return None
-    
-    
-# Calculate scores
-edges_reset['featureScore'] = edges_reset.apply(calculate_feature_score, axis=1)
-edges_reset['scaledFeatureScore'] = edges_reset['featureScore'] / 8
-edges_reset['roadTypeScore'] = edges_reset['highway'].astype(str).apply(road_type_to_score)
-edges_reset['pavementTypeScore'] = edges_reset['pavement'].astype(str).apply(pavement_type_to_score)
-edges_reset['meanWidth'] = edges_reset['width'].apply(calculate_mean_width)
-edges_reset['widthScore'] = edges_reset['meanWidth'].apply(width_score)
 
-# Calculate final score (taking into account NaN values in typeScore and widthScore)
-def calculate_final_score(row):
-    scaled_score = row['scaledFeatureScore']
-    type_score = row['roadTypeScore']
-    pavement_score = row['pavementTypeScore']
-    width_score = row['widthScore']
 
-    scores = [scaled_score, type_score, pavement_score, width_score]
+
+##########################################
+## ELEVATION SCORING FUNCTION
+##########################################
+
+def elevation_gain_score(elevation_gain, max_acceptable_gain=100):
+    # If elevation gain is positive (uphill), normalize it to a value between 0 and 1
+    if elevation_gain > 0:
+        normalized_gain = min(elevation_gain / max_acceptable_gain, 1)
+        score = 1 - normalized_gain
+    else:
+        score = 1  # Flat ground or downhill preferred
+    return score
+
+
+
+##########################################
+## CALCULATING SCORES
+##########################################    
+    
+# Calculate osm scores
+features['featureScore'] = features.apply(calculate_feature_score, axis=1)
+features['scaledFeatureScore'] = features['featureScore'] / 8
+features['roadTypeScore'] = features['highway'].astype(str).apply(road_type_to_score)
+features['pavementTypeScore'] = features['pavement'].astype(str).apply(pavement_type_to_score)
+features['meanWidth'] = features['width'].apply(calculate_mean_width)
+features['widthScore'] = features['meanWidth'].apply(width_score)
+
+# Calculate elevation scores
+features['elevationGainScore'] = features['elevation_gain'].apply(lambda x: 
+    elevation_gain_score(x))
+
+# Define the weights for each factor based on their importance
+WEIGHTS = {
+    'scaledFeatureScore': 5,
+    'roadTypeScore': 40,
+    'pavementTypeScore': 25,
+    'widthScore': 5,
+    'elevationGainScore': 25
+}
+
+# Update the final score calculation to include weights
+def calculate_weighted_final_score(row):
+    scaled_score = row['scaledFeatureScore'] * WEIGHTS['scaledFeatureScore']
+    type_score = row['roadTypeScore'] * WEIGHTS['roadTypeScore']
+    pavement_score = row['pavementTypeScore'] * WEIGHTS['pavementTypeScore']
+    width_score = row['widthScore'] * WEIGHTS['widthScore']
+    elevation_score = row['elevationGainScore'] * WEIGHTS['elevationGainScore']
+
+    scores = [scaled_score, type_score, pavement_score, width_score, elevation_score]
     valid_scores = [score for score in scores if not pd.isna(score)]
-
+    
     if valid_scores:
         return sum(valid_scores) / len(valid_scores)
     else:
         return np.nan
 
- 
-edges_reset['finalScore'] = edges_reset.apply(calculate_final_score, axis=1)
+# Apply the weighted final score calculation
+features['weightedFinalScore'] = features.apply(calculate_weighted_final_score, axis=1)
 
 # Create reversed scores since osmnx MINIMIZES (instead of maximizing) on the weight parameter
 # "Better" roads need to have lower scores
-edges_reset['finalScore_reversed'] = 1 - edges_reset['finalScore']
+max_val = math.ceil(features['weightedFinalScore'].max())
+features['weightedFinalScore_reversed'] = max_val - features['weightedFinalScore']
+
+
+
+##########################################
+## SAVING DATA
+##########################################
+
+OUT_DIR = os.path.join(BASE_DIR, 'models', 'baseline_scores.csv')
+
+features['geometry'] = features['geometry'].astype(str).apply(wkt.loads)
+features.to_csv(OUT_DIR, index=True)
+
+
+
+##########################################
+## REMOVING HIGHWAYS
+##########################################
 
 # Reset the index
-edges_reset = edges_reset.set_index(['u', 'v', 'key'])
+features = features.set_index(['u', 'v', 'key'])
 
 # Remove highways from df
 def contains_excluded_road_type(road_type):
@@ -147,9 +230,17 @@ def contains_excluded_road_type(road_type):
     return False
 
 # Apply the function to each element in the 'highway' column and filter out the matches
-edges_rest = edges_reset[~edges_reset['highway'].apply(contains_excluded_road_type)]
+no_highway = features[~features['highway'].apply(contains_excluded_road_type)]
 
-# Saving as a csv
-edges_reset['geometry'] = edges_reset['geometry'].astype(str).apply(wkt.loads)
-edges_reset.to_csv('osm_with_scores.csv', index=True)
-edges_rest.to_csv('osm_scores_no_highways.csv', index=True)
+
+
+##########################################
+## SAVING DATA
+##########################################
+
+features['geometry'] = features['geometry'].astype(str).apply(wkt.loads)
+features.to_csv('osm_with_scores.csv', index=True)
+no_highway.to_csv('osm_scores_no_highways.csv', index=True)
+
+
+pd.set_option('display.max_columns', None)
