@@ -43,25 +43,13 @@ features = transform(features)
 
 # Function to calculate the raw scores from extracted features
 def calculate_feature_score(row):
-    raw_score = 0
-    if row['trafficSignals'] == 'traffic_signals':
-        raw_score += 1
-    if row['bicycleParking'] == 'bicycle_parking':
-        raw_score += 1
-    if pd.isna(row['tramStop']):
-        raw_score += 1
-    if pd.isna(row['busStop']):
-        raw_score += 1
-    if row['lighting'] == 'street_lamp':
-        raw_score += 1
-    if pd.isna(row['parking:right']) or row['parking:right'] == 'no':
-        raw_score += 1
-    if pd.isna(row['parking:left']) or row['parking:left'] == 'no':
-        raw_score += 1
-    if pd.isna(row['parking:both']) or row['parking:both'] == 'no':
-        raw_score += 1
+    osm_score = 0
+    if row['bicycle_parking'] == 1:
+        osm_score += 1
+    if row['bus_stop'] == 0:
+        osm_score += 1
 
-    return raw_score
+    return osm_score/2
 
 
 # Function to map road type to score
@@ -82,7 +70,7 @@ def road_type_to_score(road_type):
         return 0.1
     elif re.search(r'tertiary', road_type):
         return 0.2
-    elif road_type == 'unclassified':
+    elif re.search(r'unclassified', road_type):
         return 0.6
     elif road_type == 'bridleway' or road_type == 'busway':
         return 0.5
@@ -92,33 +80,20 @@ def road_type_to_score(road_type):
 
 # Function to map pavement type to score
 def pavement_type_to_score(surface):
-    if re.search(r'asphalt|paved|concrete|tartan', surface):
+    if re.search(r'asphalt|paved|concrete|concrete:plates', surface):
         return 1
-    elif re.search(r'paving_stones|sett|fine_gravel|compacted|gravel|chipseal', surface):
+    elif re.search(r'paving_stones|sett|fine_gravel|compacted|gravel', surface):
         return 0.8
-    elif re.search(r'cobblestone|unpaved|pebblestone|sand|mud', surface):
-        return 0.2
-    elif re.search(r'grass|dirt|woodchips|earth', surface):
-        return 0.3
-    elif re.search(r'metal|wood|clay|stone|mulch|rubble|ground', surface):
-        return 0.4
-    elif re.search(r'concrete:plates|grass_paver|metal_grid|acrylic|tiles|stepping_stones|park|.*:lanes', surface):
+    elif re.search(r'ground|clay|artificial_turf', surface):
         return 0.6
+    elif re.search(r'grass|dirt|earth', surface):
+        return 0.3
+    elif re.search(r'cobblestone|unpaved', surface):
+        return 0.1
     else:
         return np.nan
     
 
-# Function to calculate the mean width
-def calculate_mean_width(width):
-    if isinstance(width, list):
-        # Extract numeric values from the list and calculate the mean
-        values = [float(re.search(r'-?\d+\.\d+', str(val)).group()) for val in width if re.search(r'-?\d+\.\d+', str(val))]
-        if values:
-            return np.mean(values)
-    else:
-        # Handle single numeric value or other cases
-        return float(re.search(r'-?\d+\.\d+', str(width)).group()) if re.search(r'-?\d+\.\d+', str(width)) else np.nan
-    
 # Function to map width to score
 def width_score(width):
     if width <= 10 and width > 0:
@@ -126,7 +101,7 @@ def width_score(width):
     elif width > 10:
         return 1
     else:
-        return None
+        return np.nan
 
 
 
@@ -134,15 +109,16 @@ def width_score(width):
 ## ELEVATION SCORING FUNCTION
 ##########################################
 
-def elevation_gain_score(elevation_gain, max_acceptable_gain=100):
-    # If elevation gain is positive (uphill), normalize it to a value between 0 and 1
-    if elevation_gain > 0:
-        normalized_gain = min(elevation_gain / max_acceptable_gain, 1)
-        score = 1 - normalized_gain
-    else:
-        score = 1  # Flat ground or downhill preferred
-    return score
+# Determine the maximum absolute elevation change
+max_change = max(features['elevation_gain'].max(), abs(features['elevation_gain'].min()))
 
+# Function to calculate the elevation gain score
+def elevation_gain_score(elevation_gain, max_change=max_change):
+    # Normalize the absolute elevation gain to a value between 0 and 1
+    normalized_abs_gain = abs(elevation_gain) / max_change
+    # Inverse score (flatter roads are preferred)
+    score = 1 - normalized_abs_gain
+    return score
 
 
 ##########################################
@@ -151,19 +127,17 @@ def elevation_gain_score(elevation_gain, max_acceptable_gain=100):
     
 # Calculate osm scores
 features['featureScore'] = features.apply(calculate_feature_score, axis=1)
-features['scaledFeatureScore'] = features['featureScore'] / 8
 features['roadTypeScore'] = features['highway'].astype(str).apply(road_type_to_score)
 features['pavementTypeScore'] = features['pavement'].astype(str).apply(pavement_type_to_score)
-features['meanWidth'] = features['width'].apply(calculate_mean_width)
-features['widthScore'] = features['meanWidth'].apply(width_score)
+features['widthScore'] = features['width'].apply(width_score)
 
 # Calculate elevation scores
-features['elevationGainScore'] = features['elevation_gain'].apply(lambda x: 
-    elevation_gain_score(x))
+features['elevationGainScore'] = features['elevation_gain'].apply(elevation_gain_score)
+
 
 # Define the weights for each factor based on their importance
 WEIGHTS = {
-    'scaledFeatureScore': 5,
+    'featureScore': 5,
     'roadTypeScore': 40,
     'pavementTypeScore': 25,
     'widthScore': 5,
@@ -172,19 +146,27 @@ WEIGHTS = {
 
 # Update the final score calculation to include weights
 def calculate_weighted_final_score(row):
-    scaled_score = row['scaledFeatureScore'] * WEIGHTS['scaledFeatureScore']
-    type_score = row['roadTypeScore'] * WEIGHTS['roadTypeScore']
-    pavement_score = row['pavementTypeScore'] * WEIGHTS['pavementTypeScore']
-    width_score = row['widthScore'] * WEIGHTS['widthScore']
-    elevation_score = row['elevationGainScore'] * WEIGHTS['elevationGainScore']
+    # Calculate the weighted score for each factor, handling NaN values
+    feature_score = row['featureScore'] * WEIGHTS['featureScore'] if not pd.isna(row['featureScore']) else 0
+    type_score = row['roadTypeScore'] * WEIGHTS['roadTypeScore'] if not pd.isna(row['roadTypeScore']) else 0
+    pavement_score = row['pavementTypeScore'] * WEIGHTS['pavementTypeScore'] if not pd.isna(row['pavementTypeScore']) else 0
+    width_score = row['widthScore'] * WEIGHTS['widthScore'] if not pd.isna(row['widthScore']) else 0
+    elevation_score = row['elevationGainScore'] * WEIGHTS['elevationGainScore'] if not pd.isna(row['elevationGainScore']) else 0
 
-    scores = [scaled_score, type_score, pavement_score, width_score, elevation_score]
-    valid_scores = [score for score in scores if not pd.isna(score)]
+    scores = [feature_score, type_score, pavement_score, width_score, elevation_score]
     
-    if valid_scores:
-        return sum(valid_scores) / len(valid_scores)
+    # Calculate the sum of the weights for valid (non-NaN) scores
+    valid_weights_sum = sum(WEIGHTS[key] for key, value in row.items() if key in WEIGHTS and not pd.isna(value))
+    
+    # Normalize the total score by the sum of valid weights
+    total_score = sum(scores)
+    if valid_weights_sum > 0:
+        normalized_score = total_score / valid_weights_sum
     else:
-        return np.nan
+        normalized_score = np.nan
+
+    return normalized_score
+
 
 # Apply the weighted final score calculation
 features['weightedFinalScore'] = features.apply(calculate_weighted_final_score, axis=1)
@@ -197,22 +179,8 @@ features['weightedFinalScore_reversed'] = max_val - features['weightedFinalScore
 
 
 ##########################################
-## SAVING DATA
-##########################################
-
-OUT_DIR = os.path.join(BASE_DIR, 'models', 'baseline_scores.csv')
-
-features['geometry'] = features['geometry'].astype(str).apply(wkt.loads)
-features.to_csv(OUT_DIR, index=True)
-
-
-
-##########################################
 ## REMOVING HIGHWAYS
 ##########################################
-
-# Reset the index
-features = features.set_index(['u', 'v', 'key'])
 
 # Remove highways from df
 def contains_excluded_road_type(road_type):
@@ -238,9 +206,8 @@ no_highway = features[~features['highway'].apply(contains_excluded_road_type)]
 ## SAVING DATA
 ##########################################
 
-features['geometry'] = features['geometry'].astype(str).apply(wkt.loads)
-features.to_csv('osm_with_scores.csv', index=True)
-no_highway.to_csv('osm_scores_no_highways.csv', index=True)
+OUT_DIR = os.path.join(BASE_DIR, 'models', 'scores_no_highways.csv')
 
+no_highway['geometry'] = no_highway['geometry'].astype(str).apply(wkt.loads)
+no_highway.to_csv(OUT_DIR, index=True)
 
-pd.set_option('display.max_columns', None)
