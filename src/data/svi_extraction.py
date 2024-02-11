@@ -19,13 +19,22 @@ import time
 from PIL import Image
 from io import BytesIO
 
+######################################
+#### Image Feature Pipeline Part 1/5:
+#### >> Clustering + SVI Extraction <<
+#### Sorting SVI [notebook]
+#### Image Segmentation [notebook]
+#### Missing Cluster Handling
+#### Image Feature Extraction
+######################################
+
 # Script should be deterministic, but we still set seeds for reproducibility
 np.random.seed(0)
 random.seed(0)
 
 
 #################################
-#### Functions for SVI extraction
+#### Functions For SVI Retrieval
 #################################
 
 # Be vary of the order of lat and lon!
@@ -80,7 +89,7 @@ def is_image_empty(img):
     stdev = np.std(np.array(img.convert('L')))
     return stdev < threshold
 
-def construct_filename_for_cluster(cluster_id, place_name=place_name):
+def construct_filename_for_cluster(cluster_id, place_name):
     """Construct a filename based on the cluster ID"""
     return f"streetview_images/{place_name.split(',')[0]}/edges/edges-cluster_{cluster_id}.jpg"
 
@@ -95,9 +104,27 @@ def retrieve_and_save_streetview_image(url, filename):
             return True
     return False
 
+#################################
+## Function for Removing Highways
+#################################
+
+def contains_excluded_road_type(road_type):
+    # List of road types to be excluded
+    excluded_types = ['trunk', 'trunk_link', 'motorway', 'motorway_link', 'primary', 'primary_link', 'secondary']
+    # If the road_type is a string, check if it contains any excluded type
+    if isinstance(road_type, str):
+        return any(excluded in road_type for excluded in excluded_types)
+    
+    # If the road_type is a list, check if any element of the list is an excluded type
+    elif isinstance(road_type, list):
+        return any(any(excluded in item for excluded in excluded_types) for item in road_type)
+    
+    # Return False for other data types
+    return False
+
 
 #########################
-#### FETCH STREET NETWORK
+#### Fetch Street Network
 #########################
 
 # Fetch the street network from OSM
@@ -105,16 +132,41 @@ place_name = "Stuttgart, Germany"
 G = ox.graph_from_place(place_name, network_type='bike', simplify=True)
 
 # Get the nodes from the graph
-nodes = ox.graph_to_gdfs(G, nodes=True, edges=False)
+nodes, edges = ox.graph_to_gdfs(G, nodes=True, edges=True)
 
 # Change to the data directory
 os.chdir('../../data')
 
+
+""" Note on building the street network:
+The clustering and therefore image retrieval for Stuttgart was based on an interims version of
+`edges`, which can be recreated with the commented-out section A, using the GeoDataFrame
+`osm_scores_no_highways.pkl` as edges.
+
+Section B allows to cluster the edges and retrieve images for a city of choice, set with `place_name` above.
+"""
+###########
+# Section A
+###########
 # Load the cleaned edges as GeoDataFrame from pickle file
-edges = pd.read_pickle('processed/osm_scores_no_highways.pkl')
+#edges = pd.read_pickle('processed/osm_scores_no_highways.pkl')
+# Create the network with the cleaned edges
+#G = ox.graph_from_gdfs(nodes, edges)
+
+###########
+# Section B
+
+## Clean the edges from highways
+# Ensure correct index
+edges = edges.set_index(['u', 'v', 'key'])
+edges = edges[~edges['highway'].apply(contains_excluded_road_type)]
 
 # Create the network with the cleaned edges
 G = ox.graph_from_gdfs(nodes, edges)
+
+# Section B ends here
+###########
+
 
 # Look at the network
 #fig, ax = ox.plot_graph(G, node_size=3, figsize=(60, 60),node_color='r', show=False, close=False)    
@@ -134,7 +186,7 @@ print(f"Number of edges with null midpoint: {edges['midpoint'].isnull().sum()}")
 
 
 #####################
-#### CLUSTERING EDGES
+#### Clustering Edges
 #####################
 
 # Idea: Too many roads > Cluster roads > Get midpoints of clusters > Get streetview images
@@ -156,38 +208,38 @@ print('Number of noise points: {}'.format(np.sum(cluster_labels == -1)))
 # Add cluster labels to the edges DataFrame
 edges['DBSCAN_group'] = clusters
 
-# Group by cluster label
-clustered = edges.groupby('DBSCAN_group')
+# Store centroids and nearest points
+data = []
 
-# DataFrame to store centroids and nearest points
-centroids_nearest = pd.DataFrame(columns=['DBSCAN_group', 'centroid', 'representative_point', 'linestring'])
-
-for cluster_label, points in clustered:
+for cluster_label, points in edges.groupby('DBSCAN_group'):
     if cluster_label == -1:
         # Handle outliers separately
         continue
 
     # Calculate the centroid of the cluster and the nearest point in the cluster to the centroid
-    multipoint = MultiPoint([point for point in points['midpoint']])
+    multipoint = MultiPoint(points['midpoint'].tolist())
     centroid = multipoint.centroid
     representative_point = nearest_points(centroid, multipoint)[1]
 
-    # Find the edge that corresponds to this representative_point and extract the linestring
-    corresponding_edge = edges[edges['midpoint'] == representative_point].iloc[0]
+    # To find the corresponding edge, we match the 'midpoint' with 'representative_point'
+    # This assumes that 'midpoint' is directly comparable with 'representative_point'
+    corresponding_edge = points[points['midpoint'].apply(lambda x: x == representative_point)].iloc[0]
     linestring = corresponding_edge.geometry
 
-    centroids_nearest = centroids_nearest.append({'DBSCAN_group': cluster_label,
-                                                  'centroid': centroid,
-                                                  'representative_point': representative_point,
-                                                  'linestring': linestring}, ignore_index=True)
+    data.append({'DBSCAN_group': cluster_label,
+                    'centroid': centroid,
+                    'representative_point': representative_point,
+                    'linestring': linestring})
 
 # Handle outliers
 outliers = edges[edges['DBSCAN_group'] == -1]
 for idx, outlier in outliers.iterrows():
-    centroids_nearest = centroids_nearest.append({'DBSCAN_group': -1,
-                                                  'centroid': outlier['midpoint'],
-                                                  'representative_point': outlier['midpoint'],
-                                                  'linestring': outlier['geometry']}, ignore_index=True)
+    data.append({'DBSCAN_group': -1,
+                    'centroid': outlier['midpoint'],
+                    'representative_point': outlier['midpoint'],
+                    'linestring': outlier['geometry']})
+
+centroids_nearest = pd.DataFrame(data)
 
 ## Assign unique identifiers for each cluster and outlier
 ## This way the outliers are treated as separate clusters
@@ -198,23 +250,16 @@ for idx, row in centroids_nearest.iterrows():
     cluster_id += 1
 centroids_nearest['cluster_id'] = centroids_nearest['cluster_id'].astype(int)
 
-# Merge to assign cluster_id to representative edges
-edges = edges.merge(centroids_nearest[['representative_point', 'cluster_id']], left_on='midpoint', right_on='representative_point', how='left')
+## Merge to assign cluster_id to representative edges
+# Preserve the original multi-index by resetting it and keeping it as columns
+edges_reset = edges.reset_index()
+# Merge
+edges = edges_reset.merge(centroids_nearest[['representative_point', 'cluster_id']],
+                          left_on='midpoint', right_on='representative_point', how='left')
 
 # Propagate cluster_id to all edges within the same DBSCAN group
-for dbscan_group in centroids_nearest['DBSCAN_group'].unique():
-    if dbscan_group == -1:
-        # Outliers already have a unique cluster_id, skip them
-        continue
-
-    # Find the cluster_id assigned to the representative edge of this DBSCAN group
-    cluster_id = centroids_nearest[centroids_nearest['DBSCAN_group'] == dbscan_group]['cluster_id'].iloc[0]
-
-    # Assign this cluster_id to all edges in the same DBSCAN group
-    edges.loc[edges['DBSCAN_group'] == dbscan_group, 'cluster_id'] = cluster_id
-
-# Ensure cluster_id is an integer
-edges['cluster_id'] = edges['cluster_id'].astype(int)
+edges['cluster_id'] = edges.groupby('DBSCAN_group')['cluster_id'].transform('first').astype(int)
+edges.set_index(['u', 'v', 'key'], inplace=True)
 
 # Check how many clusters we have and how many of them are outliers
 print(f"Number of clusters: {len(set(edges['cluster_id']))}")
