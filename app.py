@@ -41,7 +41,7 @@ def import_data(path):
     merged_osm = merged_osm.set_geometry('geometry')
     return merged_osm
 
-merged_osm = import_data('scores_no_highways.csv')
+merged_osm = import_data('scores_with_diff_weights.csv')
 
 # Initializing OSM_bike Graph
 # @st.cache(allow_output_mutation=True, hash_funcs={gpd.GeoDataFrame: lambda _: None})
@@ -91,13 +91,13 @@ def calculate_midpoint(start_data, dest_data):
 
 # Function to calculate bikeability score
 @st.cache_resource
-def calculate_bikeability_score(_graph, route):
+def calculate_bikeability_score(_graph, route, weight_param):
     scores = []
     # Iterate over the route to get pairs of nodes (start, end) representing each edge
     for start, end in zip(route[:-1], route[1:]):
         try:
             edge_data = _graph[start][end][0]
-            score = edge_data.get('weightedFinalScore', None)
+            score = 1 - edge_data.get(weight_param, None)
             if score is not None:
                 scores.append(score)
         except KeyError:
@@ -106,6 +106,35 @@ def calculate_bikeability_score(_graph, route):
             scores.append(score)
     mean_score = sum(scores) / len(scores)
     return mean_score
+
+# Function to display bikeability score as bars
+@st.cache_resource
+def render_score_as_bars(score):
+
+    full_bars = int(score * 10)
+    half_bar_needed = (score * 10) % 1 >= 0.5
+    percentage_score = round(score * 100, 2)
+    
+    percentage_html = f"<div style='margin-bottom: 5px;'><strong>Average Bikeability Score:</strong> {percentage_score}%</div>"
+    
+    bars_html = ""
+    for i in range(1, 11):
+        if i <= full_bars:
+            color = "green"
+            bars_html += f'<div style="width: 20px; height: 20px; display: inline-block; background-color: {color}; margin-right: 2px;"></div>'
+        elif i == full_bars + 1 and half_bar_needed:
+            # Use linear-gradient to create the half-bar effect
+            bars_html += f'<div style="width: 20px; height: 20px; display: inline-block; background: linear-gradient(to right, green 50%, grey 50%); margin-right: 2px;"></div>'
+        else:
+            color = "grey"
+            bars_html += f'<div style="width: 20px; height: 20px; display: inline-block; background-color: {color}; margin-right: 2px;"></div>'
+    
+    # Combine the percentage and bars HTML
+    combined_html = percentage_html + bars_html
+    
+    # Display the combined HTML content
+    st.markdown(combined_html, unsafe_allow_html=True)
+
 
 
    
@@ -124,10 +153,20 @@ route_type = st.selectbox('Select route type:', ['Shortest Route',
                                                  'Bike-Friendly Route',
                                                  'Compare Routes'])
 
+# Radio button for selecting weight parameter
+weight_options = {
+    'I trust my App developers (default)': 'baselineScore_reversed',
+    'I am fit and not scared of slopes': 'noelevationScore_reversed'
+}
+selected_weight = st.radio('Select Weight Parameter for Bike Routing:', list(weight_options.keys()))
+
 # Button to trigger route calculation
 if st.button('Find Route'):
     start_data = get_lat_lon(start_location)
     dest_data = get_lat_lon(dest_location)
+    
+    # Use the selected weight parameter from the radio button
+    weight_param = weight_options[selected_weight]
     
     # Calculate the midpoint
     midpoint = calculate_midpoint(start_data, dest_data)
@@ -136,14 +175,14 @@ if st.button('Find Route'):
     m = folium.Map(location=midpoint, zoom_start=13)
     
     # Get the best routes
-    bikeable_route, bike_pathDistance = get_bike_route(G_bike, start_location, dest_location, "weightedFinalScore_reversed")
+    bikeable_route, bike_pathDistance = get_bike_route(G_bike, start_location, dest_location, weight_param)
     bike_geom = [(G_bike.nodes[node]['y'], G_bike.nodes[node]['x']) for node in bikeable_route]
     shortest_route, pathDistance = get_osm_route(start_location, dest_location)
     route_geom = [(G.nodes[node]['y'], G.nodes[node]['x']) for node in shortest_route]
     
     # Calculate bikeability score
-    bike_score = calculate_bikeability_score(G_bike, bikeable_route)
-    short_score = calculate_bikeability_score(G_bike, shortest_route)
+    bike_score = calculate_bikeability_score(G_bike, bikeable_route, weight_param)
+    short_score = calculate_bikeability_score(G_bike, shortest_route, weight_param)
 
     # Convert route type to lowercase for consistency
     route_type_lower = route_type.lower()
@@ -169,8 +208,7 @@ if st.button('Find Route'):
                       icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
         folium.Marker(dest_data, popup='Destination', icon = folium.Icon(color='red', icon="flag")).add_to(m)
 
-    
-    # Display route information prominently using Streamlit widgets
+    # Display the route details
     if route_type_lower == 'bike-friendly route':
         st.markdown(f"#### Bike-Friendly Route Details")
         st.write(f"**Distance:** {round(bike_pathDistance/1000, 2)} km")
@@ -185,12 +223,17 @@ if st.button('Find Route'):
             st.markdown(f"#### Bike-Friendly Route")
             st.write(f"**Distance:** {round(bike_pathDistance/1000, 2)} km")
             st.write(f"**Estimated Time Needed:** {round((bike_pathDistance/1000 / 15) * 60)} minutes")
-            st.write(f"**Average Bikeability Score:** {round(bike_score*100, 2)} %")
+            #st.write(f"**Average Bikeability Score:** {round(bike_score*100, 2)} %")
+            render_score_as_bars(bike_score)
         with col2:
             st.markdown(f"#### Shortest Route")
             st.write(f"**Distance:** {round(pathDistance/1000, 2)} km")
             st.write(f"**Estimated Time Needed:** {round((pathDistance/1000 / 15) * 60)} minutes")
-            st.write(f"**Average Bikeability Score:** {round(short_score*100, 2)} %")
+            #st.write(f"**Average Bikeability Score:** {round(short_score*100, 2)} %")
+            render_score_as_bars(short_score)
+            
+        # Skip before the legend
+        st.markdown('<div style="margin-top: 50px;"></div>', unsafe_allow_html=True)
         
         st.markdown("""
         <style>
