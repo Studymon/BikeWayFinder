@@ -11,8 +11,8 @@ from scipy.interpolate import griddata
 ## SET PATHS
 #################################
 
-BASE_DIR = Path(os.getcwd()).parent
-RASTER_DIR = os.path.join(BASE_DIR, 'data', 'elevation_raster.tif')
+BASE_DIR = Path(os.getcwd()).parent.parent
+RASTER_DIR = os.path.join(BASE_DIR, 'src', 'data', 'elevation_raster.tif')
 
 ##############################
 ## LOADING OSM DATA
@@ -57,6 +57,20 @@ coords['elevation_interpolated'] = griddata(coords.dropna(subset=['elevation'])[
                                             coords[['longitude', 'latitude']],
                                             method='linear')
 
+# Check if there are still na values after linear interpolation
+if coords['elevation_interpolated'].isna().sum() > 0:
+    # Use 'nearest' method for points that could not be interpolated with 'linear'
+    coords['elevation_interpolated'] = coords.apply(
+        lambda row: row['elevation_interpolated'] if not pd.isna(row['elevation_interpolated']) 
+        else griddata(
+            coords.dropna(subset=['elevation'])[['longitude', 'latitude']],
+            coords.dropna(subset=['elevation'])['elevation'],
+            coords[['longitude', 'latitude']],
+            method='nearest'
+        )[0],
+        axis=1
+    )
+
 # Replace the NaN values in the original elevation column with the interpolated values
 coords['elevation'].fillna(coords['elevation_interpolated'], inplace=True)
 coords.drop(columns=['elevation_interpolated'], inplace=True)
@@ -79,5 +93,5 @@ coords = coords[['elevation', 'elevation_gain']]
 ## EXPORTING DATA
 ##############################
 
-OUT_DIR = os.path.join(BASE_DIR, 'data', 'elevation.csv')
+OUT_DIR = os.path.join(BASE_DIR, 'src', 'data', 'elevation.csv')
 coords.to_csv(OUT_DIR, index=True)
