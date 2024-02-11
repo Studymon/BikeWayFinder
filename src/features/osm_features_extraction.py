@@ -87,7 +87,7 @@ for feature_name, feature_gdf in features:
 
 # Applying proximity analysis as above
 # Set bigger radius buffer --> minizing na values
-nearest = proximity(pavement, buffer_radius=200)
+nearest = proximity(pavement, buffer_radius=100)
 temp = nearest[['index', 'index_right']]
 
 pavement['index_p'] = range(len(pavement))
@@ -133,7 +133,7 @@ width['width'] = width['width'].apply(get_max)
 
 # Applying proximity analysis as above
 # Set bigger radius buffer
-nearest = proximity(width, buffer_radius=200)
+nearest = proximity(width, buffer_radius=100)
 temp = nearest[['index', 'index_right']]
 temp = temp.merge(width[['index_w', 'width']], left_on='index_right', 
                   right_on='index_w', how='left').drop(columns=['index_w'])
