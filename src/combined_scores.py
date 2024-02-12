@@ -67,7 +67,7 @@ def road_type_to_score(road_type):
     elif re.search(r'service', road_type):
         return 0.5
     elif re.search(r'secondary', road_type):
-        return 0.1
+        return 0
     elif re.search(r'tertiary', road_type):
         return 0.2
     elif re.search(r'unclassified', road_type):
@@ -134,26 +134,40 @@ features['widthScore'] = features['width'].apply(width_score)
 # Calculate elevation scores
 features['elevationGainScore'] = features['elevation_gain'].apply(elevation_gain_score)
 
+# Calculate length scores (normalized between 0 and 1), shorter routes are better
+features['lengthScore'] = 1 - (features['length'] / features['length'].max())
+
 
 # Define the weights for each factor based on their importance
-WEIGHTS = {
+BASELINE_WEIGHTS = {
     'featureScore': 5,
-    'roadTypeScore': 40,
+    'roadTypeScore': 20,
     'pavementTypeScore': 25,
     'widthScore': 5,
-    'elevationGainScore': 25
+    'elevationGainScore': 25,
+    'lengthScore': 20
+}
+
+NOELEVATION_WEIGHTS = {
+    'featureScore': 10,
+    'roadTypeScore': 25,
+    'pavementTypeScore': 30,
+    'widthScore': 10,
+    'elevationGainScore': 0,
+    'lengthScore': 25
 }
 
 # Update the final score calculation to include weights
-def calculate_weighted_final_score(row):
+def calculate_weighted_final_score(row, WEIGHTS):
     # Calculate the weighted score for each factor, handling NaN values
     feature_score = row['featureScore'] * WEIGHTS['featureScore'] if not pd.isna(row['featureScore']) else 0
     type_score = row['roadTypeScore'] * WEIGHTS['roadTypeScore'] if not pd.isna(row['roadTypeScore']) else 0
     pavement_score = row['pavementTypeScore'] * WEIGHTS['pavementTypeScore'] if not pd.isna(row['pavementTypeScore']) else 0
     width_score = row['widthScore'] * WEIGHTS['widthScore'] if not pd.isna(row['widthScore']) else 0
     elevation_score = row['elevationGainScore'] * WEIGHTS['elevationGainScore'] if not pd.isna(row['elevationGainScore']) else 0
+    length_score = row['lengthScore'] * WEIGHTS['lengthScore'] if not pd.isna(row['lengthScore']) else 0
 
-    scores = [feature_score, type_score, pavement_score, width_score, elevation_score]
+    scores = [feature_score, type_score, pavement_score, width_score, elevation_score, length_score]
     
     # Calculate the sum of the weights for valid (non-NaN) scores
     valid_weights_sum = sum(WEIGHTS[key] for key, value in row.items() if key in WEIGHTS and not pd.isna(value))
@@ -169,12 +183,17 @@ def calculate_weighted_final_score(row):
 
 
 # Apply the weighted final score calculation
-features['weightedFinalScore'] = features.apply(calculate_weighted_final_score, axis=1)
+features['baselineScore'] = features.apply(lambda row: 
+    calculate_weighted_final_score(row, BASELINE_WEIGHTS), axis=1)
+
+features['noelevationScore'] = features.apply(lambda row: 
+    calculate_weighted_final_score(row, NOELEVATION_WEIGHTS), axis=1)
 
 # Create reversed scores since osmnx MINIMIZES (instead of maximizing) on the weight parameter
 # "Better" roads need to have lower scores
-max_val = math.ceil(features['weightedFinalScore'].max())
-features['weightedFinalScore_reversed'] = max_val - features['weightedFinalScore']
+# max_val = math.ceil(features['weightedFinalScore'].max())
+features['baselineScore_reversed'] = 1 - features['baselineScore']
+features['noelevationScore_reversed'] = 1 - features['noelevationScore']
 
 
 
@@ -185,7 +204,7 @@ features['weightedFinalScore_reversed'] = max_val - features['weightedFinalScore
 # Remove highways from df
 def contains_excluded_road_type(road_type):
     # List of road types to be excluded
-    excluded_types = ['trunk', 'trunk_link', 'motorway', 'motorway_link', 'primary', 'primary_link', 'secondary']
+    excluded_types = ['trunk', 'trunk_link', 'motorway', 'motorway_link', 'primary']
     # If the road_type is a string, check if it contains any excluded type
     if isinstance(road_type, str):
         return any(excluded in road_type for excluded in excluded_types)
