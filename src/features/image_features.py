@@ -53,8 +53,8 @@ def detect_class_presence(tensor, class_id, threshold=1):
     return 1 if class_pixels >= threshold else 0
 
 # Function to normalize the relative frequency of a class, capping at a maximum value for outliers
-def min_max(x, max_value):
-    return x / max_value if x <= max_value else 1
+def min_max(x, max_value, min_value=0):
+    return (x - min_value) / (max_value - min_value) if x <= max_value else 1
 
 
 ################
@@ -70,6 +70,7 @@ place_name = "Stuttgart, Germany"
 edges_clustered = pd.read_pickle(f"interim/edges_{place_name.split(',')[0]}_clustered.pkl")
 nodes = pd.read_pickle(f"interim/nodes_{place_name.split(',')[0]}.pkl")  # for building the graph G later
 clusters_processed = pd.read_pickle(f"processed/clusters_processed_{place_name.split(',')[0]}.pkl")
+survey_predictions = pd.read_csv(f"processed/new_edges_predictions.csv")
 
 # Load pixel classes from Mapillary Vistas dataset
 data = json.load(open('external/config_v1.2.json'))
@@ -171,9 +172,30 @@ results_df['greenery_rel_freq'] = results_df['greenery_rel_freq'] / results_df['
 results_df['vehicles_rel_freq'] = results_df['vehicles_rel_freq'].apply(min_max, args=(0.35,))
 
 
+##################################
+#### Processing Survey Predictions
+##################################
+
+# Transform the filename to cluster_id
+survey_predictions['cluster_id'] = survey_predictions['Filename'].apply(
+    lambda x: int(re.search(r"edges-cluster_(\d+).jpg", x).group(1)))
+
+# Keep only relevant columns
+survey_predictions = survey_predictions[['cluster_id', 'Prediction']].copy()
+
+# Min-max scaling for survey predictions
+survey_min = survey_predictions['Prediction'].min()
+survey_max = survey_predictions['Prediction'].max()
+survey_predictions['Prediction'] = survey_predictions['Prediction'].apply(min_max, args=(survey_max, survey_min))
+
+
 ####################################
 #### Merging Image Features to Edges
 ####################################
+
+# First, merge the survey predictions to the results
+survey_predictions.rename(columns={'Prediction': 'survey_score_prediction'}, inplace=True)
+results_df = results_df.merge(survey_predictions, on='cluster_id', how='inner')
 
 # Before merging, rename `cluster_id` of clusters_processed into `original_cluster_id`
 clusters_processed.rename(columns={'cluster_id': 'original_cluster_id'}, inplace=True)
