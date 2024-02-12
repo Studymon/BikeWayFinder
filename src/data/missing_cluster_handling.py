@@ -13,6 +13,7 @@ import os
 import zipfile
 import gzip
 import io
+import torch
 
 #####################################
 #### Image Feature Pipeline Part 4/5:
@@ -186,22 +187,22 @@ whether to use the closest cluster's image.
 median_distance = np.median(distances)
 
 # Implementation
-centroids_nearest['final_cluster_id'] = None  # Initialize with None
+centroids_nearest['implied_cluster_id'] = None  # Initialize with None
 
 for i, row in centroids_nearest.iterrows():
     if row['cluster_id'] in retrieved_cluster_ids:
-        centroids_nearest.at[i, 'final_cluster_id'] = row['cluster_id']
+        centroids_nearest.at[i, 'implied_cluster_id'] = row['cluster_id']
     else:
         cluster_info = clusters_without_images[clusters_without_images['cluster_id'] == row['cluster_id']].iloc[0]
         dist = euclidean((row['representative_point'].x, row['representative_point'].y),
                          (cluster_info['closest_representative_point'].x, cluster_info['closest_representative_point'].y))
         if dist <= median_distance:
-            centroids_nearest.at[i, 'final_cluster_id'] = cluster_info['closest_cluster_id']
+            centroids_nearest.at[i, 'implied_cluster_id'] = cluster_info['closest_cluster_id']
         else:
-            centroids_nearest.at[i, 'final_cluster_id'] = pd.NA  # Assign NA if distance exceeds threshold
+            centroids_nearest.at[i, 'implied_cluster_id'] = pd.NA  # Assign NA if distance exceeds threshold
 
 # Check how many missing clusters are left
-centroids_nearest['final_cluster_id'].isna().sum()
+centroids_nearest['implied_cluster_id'].isna().sum()
 
 # Write the updated dataframe to a file
 centroids_nearest.to_pickle(f"processed/clusters_processed_{place_name.split(',')[0]}.pkl")
