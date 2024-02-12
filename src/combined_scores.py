@@ -15,6 +15,7 @@ import math
 BASE_DIR = Path(os.getcwd()).parent
 OSM_DIR = os.path.join(BASE_DIR, 'src', 'data', 'osm_features.csv')
 ELE_DIR = os.path.join(BASE_DIR, 'src', 'data', 'elevation.csv')
+SVI_DIR = os.path.join(BASE_DIR, 'data', 'edges_img_features_Stuttgart.pkl')
 
 
 
@@ -24,9 +25,13 @@ ELE_DIR = os.path.join(BASE_DIR, 'src', 'data', 'elevation.csv')
 
 osm = pd.read_csv(OSM_DIR)
 ele = pd.read_csv(ELE_DIR)
+svi = pd.read_pickle(SVI_DIR)
 
-# Merge the two dataframes
-features = pd.merge(osm, ele, on=['u', 'v', 'key'], how='left')
+# Restructuring svi data to enable mergin
+svi = svi.reset_index().drop(columns=['osmid', 'geometry', 'midpoint'])
+
+# Merge the dataframes
+features = pd.merge(pd.merge(osm, ele, on=['u', 'v', 'key'], how='left'), svi, on=['u', 'v', 'key'], how='left')
 
 # Transform to GeoDataFrame
 def transform(data):
@@ -35,6 +40,30 @@ def transform(data):
     data = data.set_geometry('geometry')
     return data
 features = transform(features)
+
+
+
+##########################################
+## REMOVING HIGHWAYS
+##########################################
+
+# Remove highways from df
+def contains_excluded_road_type(road_type):
+    # List of road types to be excluded
+    excluded_types = ['trunk', 'trunk_link', 'motorway', 'motorway_link', 'primary']
+    # If the road_type is a string, check if it contains any excluded type
+    if isinstance(road_type, str):
+        return any(excluded in road_type for excluded in excluded_types)
+    
+    # If the road_type is a list, check if any element of the list is an excluded type
+    elif isinstance(road_type, list):
+        return any(any(excluded in item for excluded in excluded_types) for item in road_type)
+    
+    # Return False for other data types
+    return False
+
+# Apply the function to each element in the 'highway' column and filter out the matches
+features = features[~features['highway'].apply(contains_excluded_road_type)]
 
 
 ##########################################
@@ -121,6 +150,25 @@ def elevation_gain_score(elevation_gain, max_change=max_change):
     return score
 
 
+
+##########################################
+## SVI SCORING FUNCTIONS
+##########################################
+
+# Object detection
+def obj_detection_score(row):
+    if np.isnan(row.get('rail_track_presence', np.nan)) or np.isnan(row.get('street_light_presence', np.nan)):
+        return None
+    
+    obj_detect_score = 0
+    if row['rail_track_presence'] == 0:
+        obj_detect_score += 1
+    if row['street_light_presence'] == 1:
+        obj_detect_score += 1
+        
+    return obj_detect_score/2
+
+
 ##########################################
 ## CALCULATING SCORES
 ##########################################    
@@ -137,37 +185,64 @@ features['elevationGainScore'] = features['elevation_gain'].apply(elevation_gain
 # Calculate length scores (normalized between 0 and 1), shorter routes are better
 features['lengthScore'] = 1 - (features['length'] / features['length'].max())
 
+# Calculate svi scores
+features['objDetectScore'] = features.apply(obj_detection_score, axis=1)
+# greenery_rel_frequency col already in the form of 0-1 score
+# Low vehicle density is preferred
+# features.rename(columns={'greenery_rel_freq': 'greeneryScore'}, inplace=True)
+# features['vehicleDensityScore'] = 1 - features['vehicles_rel_freq']
+features['segmentationScore'] = (features['greenery_rel_freq'] + 
+                                 (1 - features['vehicles_rel_freq'])) / 2
+# Renaming survey_score_prediction to surveyScore for consistency
+features.rename(columns={'survey_score_prediction': 'surveyScore'}, inplace=True)
+
 
 # Define the weights for each factor based on their importance
 BASELINE_WEIGHTS = {
-    'featureScore': 5,
-    'roadTypeScore': 20,
-    'pavementTypeScore': 25,
+    'featureScore': 7,
+    'roadTypeScore': 15,
+    'pavementTypeScore': 15,
     'widthScore': 5,
-    'elevationGainScore': 25,
-    'lengthScore': 20
+    'elevationGainScore': 13,
+    'lengthScore': 20,
+    'objDetectScore': 5,
+    'segmentationScore': 10,
+    'surveyScore': 10
 }
 
-NOELEVATION_WEIGHTS = {
+NATURE_WEIGHTS = {
     'featureScore': 10,
-    'roadTypeScore': 25,
-    'pavementTypeScore': 30,
-    'widthScore': 10,
-    'elevationGainScore': 0,
-    'lengthScore': 25
+    'roadTypeScore': 5,
+    'pavementTypeScore': 5,
+    'widthScore': 5,
+    'elevationGainScore': 5,
+    'lengthScore': 10,
+    'objDetectScore': 25,
+    'segmentationScore': 25,
+    'surveyScore': 10
+}
+
+PERCEPTION_WEIGHTS = {
+    'featureScore': 0,
+    'roadTypeScore': 10,
+    'pavementTypeScore': 10,
+    'widthScore': 0,
+    'elevationGainScore': 10,
+    'lengthScore': 30,
+    'objDetectScore': 0,
+    'segmentationScore': 0,
+    'surveyScore': 40
 }
 
 # Update the final score calculation to include weights
 def calculate_weighted_final_score(row, WEIGHTS):
-    # Calculate the weighted score for each factor, handling NaN values
-    feature_score = row['featureScore'] * WEIGHTS['featureScore'] if not pd.isna(row['featureScore']) else 0
-    type_score = row['roadTypeScore'] * WEIGHTS['roadTypeScore'] if not pd.isna(row['roadTypeScore']) else 0
-    pavement_score = row['pavementTypeScore'] * WEIGHTS['pavementTypeScore'] if not pd.isna(row['pavementTypeScore']) else 0
-    width_score = row['widthScore'] * WEIGHTS['widthScore'] if not pd.isna(row['widthScore']) else 0
-    elevation_score = row['elevationGainScore'] * WEIGHTS['elevationGainScore'] if not pd.isna(row['elevationGainScore']) else 0
-    length_score = row['lengthScore'] * WEIGHTS['lengthScore'] if not pd.isna(row['lengthScore']) else 0
-
-    scores = [feature_score, type_score, pavement_score, width_score, elevation_score, length_score]
+    # Initialize a list to hold the scores
+    scores = []
+    
+    # Calculate the weighted score for each factor in WEIGHTS, handling NaN values
+    for key, weight in WEIGHTS.items():
+        score = row.get(key, 0) * weight if not pd.isna(row.get(key)) else 0
+        scores.append(score)
     
     # Calculate the sum of the weights for valid (non-NaN) scores
     valid_weights_sum = sum(WEIGHTS[key] for key, value in row.items() if key in WEIGHTS and not pd.isna(value))
@@ -181,43 +256,46 @@ def calculate_weighted_final_score(row, WEIGHTS):
 
     return normalized_score
 
+# def calculate_weighted_final_score(row, WEIGHTS):
+#     # Calculate the weighted score for each factor, handling NaN values
+#     feature_score = row['featureScore'] * WEIGHTS['featureScore'] if not pd.isna(row['featureScore']) else 0
+#     type_score = row['roadTypeScore'] * WEIGHTS['roadTypeScore'] if not pd.isna(row['roadTypeScore']) else 0
+#     pavement_score = row['pavementTypeScore'] * WEIGHTS['pavementTypeScore'] if not pd.isna(row['pavementTypeScore']) else 0
+#     width_score = row['widthScore'] * WEIGHTS['widthScore'] if not pd.isna(row['widthScore']) else 0
+#     elevation_score = row['elevationGainScore'] * WEIGHTS['elevationGainScore'] if not pd.isna(row['elevationGainScore']) else 0
+#     length_score = row['lengthScore'] * WEIGHTS['lengthScore'] if not pd.isna(row['lengthScore']) else 0
+
+#     scores = [feature_score, type_score, pavement_score, width_score, elevation_score, length_score]
+    
+#     # Calculate the sum of the weights for valid (non-NaN) scores
+#     valid_weights_sum = sum(WEIGHTS[key] for key, value in row.items() if key in WEIGHTS and not pd.isna(value))
+    
+#     # Normalize the total score by the sum of valid weights
+#     total_score = sum(scores)
+#     if valid_weights_sum > 0:
+#         normalized_score = total_score / valid_weights_sum
+#     else:
+#         normalized_score = np.nan
+
+#     return normalized_score
+
 
 # Apply the weighted final score calculation
 features['baselineScore'] = features.apply(lambda row: 
     calculate_weighted_final_score(row, BASELINE_WEIGHTS), axis=1)
 
-features['noelevationScore'] = features.apply(lambda row: 
-    calculate_weighted_final_score(row, NOELEVATION_WEIGHTS), axis=1)
+features['natureScore'] = features.apply(lambda row: 
+    calculate_weighted_final_score(row, NATURE_WEIGHTS), axis=1)
+
+features['perceptionScore'] = features.apply(lambda row: 
+    calculate_weighted_final_score(row, PERCEPTION_WEIGHTS), axis=1)
 
 # Create reversed scores since osmnx MINIMIZES (instead of maximizing) on the weight parameter
 # "Better" roads need to have lower scores
 # max_val = math.ceil(features['weightedFinalScore'].max())
 features['baselineScore_reversed'] = 1 - features['baselineScore']
-features['noelevationScore_reversed'] = 1 - features['noelevationScore']
-
-
-
-##########################################
-## REMOVING HIGHWAYS
-##########################################
-
-# Remove highways from df
-def contains_excluded_road_type(road_type):
-    # List of road types to be excluded
-    excluded_types = ['trunk', 'trunk_link', 'motorway', 'motorway_link', 'primary']
-    # If the road_type is a string, check if it contains any excluded type
-    if isinstance(road_type, str):
-        return any(excluded in road_type for excluded in excluded_types)
-    
-    # If the road_type is a list, check if any element of the list is an excluded type
-    elif isinstance(road_type, list):
-        return any(any(excluded in item for excluded in excluded_types) for item in road_type)
-    
-    # Return False for other data types
-    return False
-
-# Apply the function to each element in the 'highway' column and filter out the matches
-no_highway = features[~features['highway'].apply(contains_excluded_road_type)]
+features['natureScore_reversed'] = 1 - features['natureScore']
+features['perceptionScore_reversed'] = 1 - features['perceptionScore']
 
 
 
@@ -225,8 +303,8 @@ no_highway = features[~features['highway'].apply(contains_excluded_road_type)]
 ## SAVING DATA
 ##########################################
 
-OUT_DIR = os.path.join(BASE_DIR, 'models', 'scores_no_highways.csv')
+OUT_DIR = os.path.join(BASE_DIR, 'models', 'final_scores.csv')
 
-no_highway['geometry'] = no_highway['geometry'].astype(str).apply(wkt.loads)
-no_highway.to_csv(OUT_DIR, index=True)
+features['geometry'] = features['geometry'].astype(str).apply(wkt.loads)
+features.to_csv(OUT_DIR, index=True)
 
