@@ -149,8 +149,8 @@ start_location = st.text_input('Enter start location:')
 dest_location = st.text_input('Enter destination:')
 
 # Dropdown for route type
-route_type = st.selectbox('Select route type:', ['Shortest Route', 
-                                                 'Bike-Friendly Route',
+route_type = st.selectbox('Select route type:', ['Bike-Friendly Route',
+                                                 'Shortest Route',
                                                  'Compare Routes'])
 
 # Radio button for selecting weight parameter
@@ -159,7 +159,7 @@ weight_options = {
     'I do not like traffic and prefer riding in nature': 'natureScore_reversed',
     'I highly trust the opinions of my fellow cyclists': 'perceptionScore_reversed'
 }
-selected_weight = st.radio('Select Weight Parameter for Bike Routing:', list(weight_options.keys()))
+selected_weight = st.radio('Customize Your Bike Journey:', list(weight_options.keys()))
 
 # Button to trigger route calculation
 if st.button('Find Route'):
