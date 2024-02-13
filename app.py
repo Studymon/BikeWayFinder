@@ -41,7 +41,7 @@ def import_data(path):
     merged_osm = merged_osm.set_geometry('geometry')
     return merged_osm
 
-merged_osm = import_data('final_scores.csv')
+merged_osm = import_data('data_visible/processed/final_scores.csv')
 
 # Initializing OSM_bike Graph
 # @st.cache(allow_output_mutation=True, hash_funcs={gpd.GeoDataFrame: lambda _: None})
@@ -156,7 +156,6 @@ route_type = st.selectbox('Select route type:', ['Shortest Route',
 # Radio button for selecting weight parameter
 weight_options = {
     'I trust my App developers (default)': 'baselineScore_reversed',
-    'I am fit and not scared of slopes': 'noelevationScore_reversed',
     'I do not like traffic and prefer riding in nature': 'natureScore_reversed',
     'I highly trust the opinions of my fellow cyclists': 'perceptionScore_reversed'
 }
