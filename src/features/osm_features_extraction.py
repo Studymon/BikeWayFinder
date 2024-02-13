@@ -7,8 +7,11 @@ from pathlib import Path
 from shapely.geometry import MultiPolygon
 from shapely import wkt
 
+# Set place
+place_name = 'Stuttgart'
+
 # Extract the graph from OSM
-G = ox.graph_from_place('Stuttgart', network_type='bike')
+G = ox.graph_from_place(place_name, network_type='bike')
 nodes, edges = ox.graph_to_gdfs(G, nodes=True, edges=True)
 
 # Reset the index of edges --> this is the gdf we are going to work with
@@ -34,7 +37,7 @@ def osm_features(city):
     return bicycle_parking, bus_stop, pavement, width
 
 
-bicycle_parking, bus_stop, pavement, width = osm_features('Stuttgart')
+bicycle_parking, bus_stop, pavement, width = osm_features(place_name)
 
 
 
@@ -162,7 +165,7 @@ edges_reset = edges_reset.set_index(['u', 'v', 'key'])
 
 # Saving edges with osm features as csv
 BASE_DIR = Path(os.getcwd()).parent.parent
-OUT_DIR = os.path.join(BASE_DIR, 'src', 'data', 'osm_features.csv')
+OUT_DIR = os.path.join(BASE_DIR, 'data_visible', 'processed', 'osm_features.csv')
 edges_reset['geometry'] = edges_reset['geometry'].astype(str).apply(wkt.loads)
 edges_reset.to_csv(OUT_DIR, index=True)
 

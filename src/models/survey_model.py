@@ -27,9 +27,10 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 #################################
 cwd = Path(os.getcwd())
 BASE_DIR = cwd.parent.parent
-SURVEY_DIR = os.path.join(BASE_DIR, 'src', 'data', 'survey.csv')
-REF_DIR = os.path.join(BASE_DIR, 'src', 'data', 'sampled_edges.csv')
+SURVEY_DIR = os.path.join(BASE_DIR, 'data_visible', 'raw', 'survey.csv')
+REF_DIR = os.path.join(BASE_DIR, 'data_visible', 'interim', 'sampled_edges.csv')
 IMAGE_DIR = os.path.join(BASE_DIR, 'data', 'survey_edges')
+MODEL_DIR = os.path.join(BASE_DIR, 'models', 'survey_model.pt')
 
 #################################
 ## DATA PREPROCESSING
@@ -78,12 +79,14 @@ df_new = preprocess(df)
 ## ADD SCORES TO EACH IMAGE
 #################################
 
+# Restructure the reference data (contains cluster #, survey ID, and image name)
 ref = pd.read_csv(REF_DIR, sep=';', header=None)
 ref = ref.drop(ref.columns[3:8], axis=1)
 ref.columns = ['cluster_num', 'survey_id', 'image_name']
 ref['survey_id'] = ref['survey_id'].astype(str)
 
 scores = df_new.drop(df_new.columns[2:8], axis=1)
+# Isolate survey ID for merge
 scores['image'] = scores['image'].str.split('_').str[-1]
 
 base_scores = pd.merge(ref, scores, left_on='survey_id', right_on='image', how='left')
@@ -332,7 +335,7 @@ for epoch in trange(NUM_EPOCHS, desc="Epochs"):
 
     if valid_loss < best_valid_loss:
         best_valid_loss = valid_loss
-        torch.save(model.state_dict(), 'survey_model.pt')
+        torch.save(model.state_dict(), MODEL_DIR)
         patience_counter = 0
         print(f"Validation loss decreased to {valid_loss:.3f}, saving model")
     else:
@@ -355,7 +358,9 @@ for epoch in trange(NUM_EPOCHS, desc="Epochs"):
 ## TESTING
 #################################
 
-model.load_state_dict(torch.load('survey_model.pt'))
+model.load_state_dict(torch.load(MODEL_DIR))
+# If only working on cpu, try
+# model.load_state_dict(torch.load(MODEL_DIR, map_location=torch.device('cpu')))
 model.to(DEVICE)
 
 # Testing on unseen data
@@ -411,7 +416,9 @@ model = resnet50(weights=ResNet50_Weights.DEFAULT)
 in_features = model.fc.in_features
 final_fc = nn.Linear(in_features, NUM_CLASSES)
 model.fc = final_fc
-model.load_state_dict(torch.load('survey_model.pt'))
+model.load_state_dict(torch.load(MODEL_DIR))
+# If only working on cpu, try
+# model.load_state_dict(torch.load(MODEL_DIR, map_location=torch.device('cpu')))
 model.to(DEVICE)
 
 # Use model to predict scores on unseen data
@@ -454,7 +461,7 @@ results_new['Prediction'] = results_new['Prediction'].apply(custom_round)
 
 # Save the predictions to a csv file
 # Output directory
-OUT_DIR = os.path.join(BASE_DIR, 'src', 'data', 'new_edges_predictions.csv')
+OUT_DIR = os.path.join(BASE_DIR, 'data_visible', 'interim', 'edges_survey_predictions.csv')
 results_new.to_csv(OUT_DIR, index=False)
 
 
