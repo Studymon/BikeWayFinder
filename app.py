@@ -156,7 +156,6 @@ route_type = st.selectbox('Select route type:', ['Shortest Route',
 # Radio button for selecting weight parameter
 weight_options = {
     'I trust my App developers (default)': 'baselineScore_reversed',
-    'I am fit and not scared of slopes': 'noelevationScore_reversed',
     'I do not like traffic and prefer riding in nature': 'natureScore_reversed',
     'I highly trust the opinions of my fellow cyclists': 'perceptionScore_reversed'
 }

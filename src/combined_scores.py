@@ -13,9 +13,9 @@ import math
 ##########################################
 
 BASE_DIR = Path(os.getcwd()).parent
-OSM_DIR = os.path.join(BASE_DIR, 'src', 'data', 'osm_features.csv')
-ELE_DIR = os.path.join(BASE_DIR, 'src', 'data', 'elevation.csv')
-SVI_DIR = os.path.join(BASE_DIR, 'data', 'edges_img_features_Stuttgart.pkl')
+OSM_DIR = os.path.join(BASE_DIR, 'data_visible', 'processed', 'osm_features.csv')
+ELE_DIR = os.path.join(BASE_DIR, 'data_visible', 'processed', 'elevation.csv')
+SVI_DIR = os.path.join(BASE_DIR, 'data_visible', 'processed', 'edges_img_features_Stuttgart.pkl')
 
 
 
@@ -256,29 +256,6 @@ def calculate_weighted_final_score(row, WEIGHTS):
 
     return normalized_score
 
-# def calculate_weighted_final_score(row, WEIGHTS):
-#     # Calculate the weighted score for each factor, handling NaN values
-#     feature_score = row['featureScore'] * WEIGHTS['featureScore'] if not pd.isna(row['featureScore']) else 0
-#     type_score = row['roadTypeScore'] * WEIGHTS['roadTypeScore'] if not pd.isna(row['roadTypeScore']) else 0
-#     pavement_score = row['pavementTypeScore'] * WEIGHTS['pavementTypeScore'] if not pd.isna(row['pavementTypeScore']) else 0
-#     width_score = row['widthScore'] * WEIGHTS['widthScore'] if not pd.isna(row['widthScore']) else 0
-#     elevation_score = row['elevationGainScore'] * WEIGHTS['elevationGainScore'] if not pd.isna(row['elevationGainScore']) else 0
-#     length_score = row['lengthScore'] * WEIGHTS['lengthScore'] if not pd.isna(row['lengthScore']) else 0
-
-#     scores = [feature_score, type_score, pavement_score, width_score, elevation_score, length_score]
-    
-#     # Calculate the sum of the weights for valid (non-NaN) scores
-#     valid_weights_sum = sum(WEIGHTS[key] for key, value in row.items() if key in WEIGHTS and not pd.isna(value))
-    
-#     # Normalize the total score by the sum of valid weights
-#     total_score = sum(scores)
-#     if valid_weights_sum > 0:
-#         normalized_score = total_score / valid_weights_sum
-#     else:
-#         normalized_score = np.nan
-
-#     return normalized_score
-
 
 # Apply the weighted final score calculation
 features['baselineScore'] = features.apply(lambda row: 
@@ -303,7 +280,7 @@ features['perceptionScore_reversed'] = 1 - features['perceptionScore']
 ## SAVING DATA
 ##########################################
 
-OUT_DIR = os.path.join(BASE_DIR, 'models', 'final_scores.csv')
+OUT_DIR = os.path.join(BASE_DIR, 'data_visible', 'processed', 'final_scores.csv')
 
 features['geometry'] = features['geometry'].astype(str).apply(wkt.loads)
 features.to_csv(OUT_DIR, index=True)
