@@ -85,6 +85,15 @@ def get_bike_route(_graph, start_location, dest_location, weight):
 # Calculate the midpoint between start & destination
 @st.cache_resource
 def calculate_midpoint(start_data, dest_data):
+    # Check if start_data or dest_data is None and return an appropriate message
+    if start_data is None and dest_data is None:
+        return "Both start and destination locations do not exist."
+    elif start_data is None:
+        return "The start location does not exist."
+    elif dest_data is None:
+        return "The destination location does not exist."
+
+    # If both start_data and dest_data are valid, calculate the midpoint
     mid_lat = (start_data[0] + dest_data[0]) / 2
     mid_lon = (start_data[1] + dest_data[1]) / 2
     return (mid_lat, mid_lon)
@@ -102,7 +111,7 @@ def calculate_bikeability_score(_graph, route, weight_param):
                 scores.append(score)
         except KeyError:
             # Means we have a motorway, primary road, etc. in the route
-            score = 0.2
+            score = 0
             scores.append(score)
     mean_score = sum(scores) / len(scores)
     return mean_score
@@ -171,9 +180,13 @@ if st.button('Find Route'):
     
     # Calculate the midpoint
     midpoint = calculate_midpoint(start_data, dest_data)
+    
+    # Check if the midpoint is a tuple (coordinates) or a string (error message)
+    if isinstance(midpoint, tuple):
+        m = folium.Map(location=midpoint, zoom_start=13)
+    else:
+        st.error(midpoint)
 
-    # Create folium map
-    m = folium.Map(location=midpoint, zoom_start=13)
     
     # Get the best routes
     bikeable_route, bike_pathDistance = get_bike_route(G_bike, start_location, dest_location, weight_param)
