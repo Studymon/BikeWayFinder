@@ -222,7 +222,7 @@ if st.button('Find Route'):
             bike_geom = route_geom  
             bike_pathDistance = pathDistance 
             bike_score = short_score
-            st.info("Failed to find a bike-friendly route. Displaying the shortest route instead.")
+            st.info("Failed to find a bike-friendly route up to our standards. Displaying the shortest route instead.")
             
             
         # Calculate estimated time in minutes for each route (avg bike speed 15km/h)

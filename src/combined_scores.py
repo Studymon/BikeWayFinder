@@ -198,10 +198,10 @@ features.rename(columns={'survey_score_prediction': 'surveyScore'}, inplace=True
 # Define the weights for each factor based on their importance
 BASELINE_WEIGHTS = {
     'featureScore': 5,
-    'roadTypeScore': 20,
+    'roadTypeScore': 15,
     'pavementTypeScore': 10,
     'widthScore': 5,
-    'elevationGainScore': 5,
+    'elevationGainScore': 10,
     'lengthScore': 25,
     'objDetectScore': 10,
     'segmentationScore': 10,
