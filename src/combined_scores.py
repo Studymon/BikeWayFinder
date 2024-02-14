@@ -189,8 +189,6 @@ features['lengthScore'] = 1 - (features['length'] / features['length'].max())
 features['objDetectScore'] = features.apply(obj_detection_score, axis=1)
 # greenery_rel_frequency col already in the form of 0-1 score
 # Low vehicle density is preferred
-# features.rename(columns={'greenery_rel_freq': 'greeneryScore'}, inplace=True)
-# features['vehicleDensityScore'] = 1 - features['vehicles_rel_freq']
 features['segmentationScore'] = (features['greenery_rel_freq'] + 
                                  (1 - features['vehicles_rel_freq'])) / 2
 # Renaming survey_score_prediction to surveyScore for consistency
@@ -199,27 +197,27 @@ features.rename(columns={'survey_score_prediction': 'surveyScore'}, inplace=True
 
 # Define the weights for each factor based on their importance
 BASELINE_WEIGHTS = {
-    'featureScore': 7,
-    'roadTypeScore': 15,
-    'pavementTypeScore': 15,
+    'featureScore': 5,
+    'roadTypeScore': 20,
+    'pavementTypeScore': 10,
     'widthScore': 5,
-    'elevationGainScore': 13,
-    'lengthScore': 20,
-    'objDetectScore': 5,
+    'elevationGainScore': 5,
+    'lengthScore': 25,
+    'objDetectScore': 10,
     'segmentationScore': 10,
     'surveyScore': 10
 }
 
 NATURE_WEIGHTS = {
-    'featureScore': 10,
+    'featureScore': 5,
     'roadTypeScore': 5,
     'pavementTypeScore': 5,
-    'widthScore': 5,
-    'elevationGainScore': 5,
-    'lengthScore': 10,
+    'widthScore': 0,
+    'elevationGainScore': 0,
+    'lengthScore': 15,
     'objDetectScore': 25,
     'segmentationScore': 25,
-    'surveyScore': 10
+    'surveyScore': 20
 }
 
 PERCEPTION_WEIGHTS = {
@@ -227,8 +225,8 @@ PERCEPTION_WEIGHTS = {
     'roadTypeScore': 10,
     'pavementTypeScore': 10,
     'widthScore': 0,
-    'elevationGainScore': 10,
-    'lengthScore': 30,
+    'elevationGainScore': 5,
+    'lengthScore': 35,
     'objDetectScore': 0,
     'segmentationScore': 0,
     'surveyScore': 40

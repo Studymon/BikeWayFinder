@@ -91,20 +91,6 @@ def get_bike_route(_graph, start_location, dest_location, weight):
     return best_route, bike_pathDistance
 
 
-
-# def get_bike_route(_graph, start_location, dest_location, weight):
-     
-#     start_data = get_lat_lon(start_location)
-#     dest_data = get_lat_lon(dest_location)
-
-#     orig_edge = ox.nearest_edges(_graph, start_data[1], start_data[0])
-#     dest_edge = ox.nearest_edges(_graph, dest_data[1], dest_data[0])
-#     best_route = ox.shortest_path(_graph, orig_edge[0], dest_edge[1], weight=weight)
-#     # Calculate the total length of the path using the 'length' attribute of the edges
-#     bike_pathDistance = sum(_graph[u][v][0]['length'] for u, v in zip(best_route[:-1], best_route[1:]))
-    
-#     return best_route, bike_pathDistance
-
 # Calculate the midpoint between start & destination
 @st.cache_resource
 def calculate_midpoint(start_data, dest_data):
@@ -139,22 +125,6 @@ def calculate_bikeability_score(_graph, route, weight_param):
     mean_score = sum(scores) / len(scores) if scores else 0  # Avoid division by zero
     return mean_score
 
-
-# def calculate_bikeability_score(_graph, route, weight_param):
-#     scores = []
-#     # Iterate over the route to get pairs of nodes (start, end) representing each edge
-#     for start, end in zip(route[:-1], route[1:]):
-#         try:
-#             edge_data = _graph[start][end][0]
-#             score = 1 - edge_data.get(weight_param, None)
-#             if score is not None:
-#                 scores.append(score)
-#         except KeyError:
-#             # Means we have a motorway, primary road, etc. in the route
-#             score = 0
-#             scores.append(score)
-#     mean_score = sum(scores) / len(scores)
-#     return mean_score
 
 # Function to display bikeability score as bars
 @st.cache_resource
@@ -252,14 +222,47 @@ if st.button('Find Route'):
             bike_geom = route_geom  
             bike_pathDistance = pathDistance 
             bike_score = short_score
-            st.error("Failed to find a bike-friendly route. Displaying the shortest route instead.")
+            st.info("Failed to find a bike-friendly route. Displaying the shortest route instead.")
+            
+            
+        # Calculate estimated time in minutes for each route (avg bike speed 15km/h)
+        bike_time_estimated = (bike_pathDistance / 1000 / 15) * 60
+        shortest_time_estimated = (pathDistance / 1000 / 15) * 60
+
+        # Determine if the bike route is preferable
+        prefer_bike_route = True 
         
+        # Check if bikeability score for the bike route is lower than the shortest route
+        if bike_score < short_score:
+            prefer_bike_route = False
+        # Check if bikeability score for the bike route is within 2 percentage points of the shortest route
+        # and the time needed is longer by more than 5 minutes
+        elif abs(bike_score - short_score) <= 0.02 and (bike_time_estimated - shortest_time_estimated) > 5:
+            prefer_bike_route = False
+            
+        # Based on the decision, adjust the route to be used for display and further calculations
+        if prefer_bike_route:
+            # Use bikeable_route for further actions
+            bikeable_route = bikeable_route
+            bike_geom = bike_geom
+            bike_pathDistance = bike_pathDistance
+            bike_time_estimated = bike_time_estimated
+            bike_score = bike_score
+        else:
+            # Fallback to shortest_route
+            bikeable_route = shortest_route
+            bike_geom = route_geom
+            bike_pathDistance = pathDistance
+            bike_time_estimated = shortest_time_estimated
+            bike_score = short_score
+            st.info("The shortest route is the most bicycle-friendly")
+                
 
         
         # Convert route type to lowercase for consistency
         route_type_lower = route_type.lower()
 
-        if route_type_lower == 'compare routes' or fallback_to_shortest:
+        if route_type_lower == 'compare routes' or fallback_to_shortest or prefer_bike_route:
             folium.PolyLine(bike_geom, color="blue", weight=4, opacity=1).add_to(m)
             folium.Marker(start_data, popup='Start',
                         icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
@@ -268,7 +271,7 @@ if st.button('Find Route'):
             # Fetch and display the shortest route
             folium.PolyLine(route_geom, color="red", weight=4, opacity=0.5).add_to(m)
         
-        elif route_type_lower == 'bike-friendly route' or fallback_to_shortest:
+        elif route_type_lower == 'bike-friendly route' or fallback_to_shortest or prefer_bike_route:
             folium.PolyLine(bike_geom, color="blue", weight=4, opacity=1).add_to(m)
             folium.Marker(start_data, popup='Start',
                         icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
@@ -283,25 +286,23 @@ if st.button('Find Route'):
         # Display the route details
         if route_type_lower == 'bike-friendly route' or fallback_to_shortest:
             st.markdown(f"#### Bike-Friendly Route Details")
-            st.write(f"**Distance:** {round(bike_pathDistance/1000, 2)} km")
-            st.write(f"**Estimated Time Needed:** {round((bike_pathDistance/1000 / 15) * 60)} minutes")
+            st.write(f"**Distance:** {round(bike_pathDistance / 1000, 2)} km")
+            st.write(f"**Estimated Time Needed:** {round(bike_time_estimated)} minutes")
         elif route_type_lower == 'shortest route':
             st.markdown(f"#### Shortest Route Details")
-            st.write(f"**Distance:** {round(pathDistance/1000, 2)} km")
-            st.write(f"**Estimated Time Needed:** {round((pathDistance/1000 / 15) * 60)} minutes")
+            st.write(f"**Distance:** {round(pathDistance / 1000, 2)} km")
+            st.write(f"**Estimated Time Needed:** {round(shortest_time_estimated)} minutes")
         elif route_type_lower == 'compare routes' or fallback_to_shortest:
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown(f"#### Bike-Friendly Route")
-                st.write(f"**Distance:** {round(bike_pathDistance/1000, 2)} km")
-                st.write(f"**Estimated Time Needed:** {round((bike_pathDistance/1000 / 15) * 60)} minutes")
-                #st.write(f"**Average Bikeability Score:** {round(bike_score*100, 2)} %")
+                st.write(f"**Distance:** {round(bike_pathDistance / 1000, 2)} km")
+                st.write(f"**Estimated Time Needed:** {round(bike_time_estimated)} minutes")
                 render_score_as_bars(bike_score)
             with col2:
                 st.markdown(f"#### Shortest Route")
-                st.write(f"**Distance:** {round(pathDistance/1000, 2)} km")
-                st.write(f"**Estimated Time Needed:** {round((pathDistance/1000 / 15) * 60)} minutes")
-                #st.write(f"**Average Bikeability Score:** {round(short_score*100, 2)} %")
+                st.write(f"**Distance:** {round(pathDistance / 1000, 2)} km")
+                st.write(f"**Estimated Time Needed:** {round(shortest_time_estimated)} minutes")
                 render_score_as_bars(short_score)
                 
             # Skip before the legend
