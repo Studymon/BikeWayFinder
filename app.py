@@ -70,17 +70,40 @@ def get_osm_route(start_location, dest_location):
 # Get best bike route from OSM
 @st.cache_resource
 def get_bike_route(_graph, start_location, dest_location, weight):
-     
     start_data = get_lat_lon(start_location)
     dest_data = get_lat_lon(dest_location)
-
-    orig_edge = ox.nearest_edges(_graph, start_data[1], start_data[0])
-    dest_edge = ox.nearest_edges(_graph, dest_data[1], dest_data[0])
-    best_route = ox.shortest_path(_graph, orig_edge[0], dest_edge[1], weight=weight)
-    # Calculate the total length of the path using the 'length' attribute of the edges
+    if start_data is None or dest_data is None:
+        return None, "Start or destination location could not be resolved."
+    try:
+        orig_edge = ox.nearest_edges(_graph, start_data[1], start_data[0])
+        dest_edge = ox.nearest_edges(_graph, dest_data[1], dest_data[0])
+        best_route = ox.shortest_path(_graph, orig_edge[0], dest_edge[1], weight=weight)
+    except Exception as e:
+        # If bike-friendly route is not found, fallback to shortest route
+        print(f"Failed to find bike-friendly path: {e}. Falling back to shortest route.")
+        orig_node = ox.distance.nearest_nodes(G, start_data[1], start_data[0])
+        dest_node = ox.distance.nearest_nodes(G, dest_data[1], dest_data[0])
+        best_route = nx.shortest_path(G, orig_node, dest_node, weight="length")
+    if best_route is None:
+        return None, "No path found."
     bike_pathDistance = sum(_graph[u][v][0]['length'] for u, v in zip(best_route[:-1], best_route[1:]))
     
     return best_route, bike_pathDistance
+
+
+
+# def get_bike_route(_graph, start_location, dest_location, weight):
+     
+#     start_data = get_lat_lon(start_location)
+#     dest_data = get_lat_lon(dest_location)
+
+#     orig_edge = ox.nearest_edges(_graph, start_data[1], start_data[0])
+#     dest_edge = ox.nearest_edges(_graph, dest_data[1], dest_data[0])
+#     best_route = ox.shortest_path(_graph, orig_edge[0], dest_edge[1], weight=weight)
+#     # Calculate the total length of the path using the 'length' attribute of the edges
+#     bike_pathDistance = sum(_graph[u][v][0]['length'] for u, v in zip(best_route[:-1], best_route[1:]))
+    
+#     return best_route, bike_pathDistance
 
 # Calculate the midpoint between start & destination
 @st.cache_resource
@@ -101,8 +124,9 @@ def calculate_midpoint(start_data, dest_data):
 # Function to calculate bikeability score
 @st.cache_resource
 def calculate_bikeability_score(_graph, route, weight_param):
+    if route is None:
+        return "Unable to calculate score without a valid route."
     scores = []
-    # Iterate over the route to get pairs of nodes (start, end) representing each edge
     for start, end in zip(route[:-1], route[1:]):
         try:
             edge_data = _graph[start][end][0]
@@ -110,11 +134,27 @@ def calculate_bikeability_score(_graph, route, weight_param):
             if score is not None:
                 scores.append(score)
         except KeyError:
-            # Means we have a motorway, primary road, etc. in the route
-            score = 0
+            score = 0  # Assuming a default score for non-bike-friendly paths
             scores.append(score)
-    mean_score = sum(scores) / len(scores)
+    mean_score = sum(scores) / len(scores) if scores else 0  # Avoid division by zero
     return mean_score
+
+
+# def calculate_bikeability_score(_graph, route, weight_param):
+#     scores = []
+#     # Iterate over the route to get pairs of nodes (start, end) representing each edge
+#     for start, end in zip(route[:-1], route[1:]):
+#         try:
+#             edge_data = _graph[start][end][0]
+#             score = 1 - edge_data.get(weight_param, None)
+#             if score is not None:
+#                 scores.append(score)
+#         except KeyError:
+#             # Means we have a motorway, primary road, etc. in the route
+#             score = 0
+#             scores.append(score)
+#     mean_score = sum(scores) / len(scores)
+#     return mean_score
 
 # Function to display bikeability score as bars
 @st.cache_resource
@@ -178,107 +218,125 @@ if st.button('Find Route'):
     # Use the selected weight parameter from the radio button
     weight_param = weight_options[selected_weight]
     
+    execution_continue = True
+    
     # Calculate the midpoint
     midpoint = calculate_midpoint(start_data, dest_data)
     
     # Check if the midpoint is a tuple (coordinates) or a string (error message)
-    if isinstance(midpoint, tuple):
-        m = folium.Map(location=midpoint, zoom_start=13)
-    else:
+    if not isinstance(midpoint, tuple):
         st.error(midpoint)
+        execution_continue = False
+    else:
+        m = folium.Map(location=midpoint, zoom_start=13)
 
-    
-    # Get the best routes
-    bikeable_route, bike_pathDistance = get_bike_route(G_bike, start_location, dest_location, weight_param)
-    bike_geom = [(G_bike.nodes[node]['y'], G_bike.nodes[node]['x']) for node in bikeable_route]
-    shortest_route, pathDistance = get_osm_route(start_location, dest_location)
-    route_geom = [(G.nodes[node]['y'], G.nodes[node]['x']) for node in shortest_route]
-    
-    # Calculate bikeability score
-    bike_score = calculate_bikeability_score(G_bike, bikeable_route, weight_param)
-    short_score = calculate_bikeability_score(G_bike, shortest_route, weight_param)
+    if execution_continue:
+        
+        # Attempt to get the bike-friendly route
+        bikeable_route, bike_pathDistance = get_bike_route(G_bike, start_location, dest_location, weight_param)
+        
+        # Always fetch the shortest route for comparison or fallback
+        shortest_route, pathDistance = get_osm_route(start_location, dest_location)
+        route_geom = [(G.nodes[node]['y'], G.nodes[node]['x']) for node in shortest_route]
+        short_score = calculate_bikeability_score(G_bike, shortest_route, weight_param)
+        
+        # Determine if we need to fallback to the shortest route
+        fallback_to_shortest = bikeable_route is None
+        
+        if not fallback_to_shortest:
+            # If we have a bikeable route, use it
+            bike_geom = [(G_bike.nodes[node]['y'], G_bike.nodes[node]['x']) for node in bikeable_route]
+            bike_score = calculate_bikeability_score(G_bike, bikeable_route, weight_param)
+        else:
+            # If no bikeable route, fallback to shortest and consider its score
+            bike_geom = route_geom  
+            bike_pathDistance = pathDistance 
+            bike_score = short_score
+            st.error("Failed to find a bike-friendly route. Displaying the shortest route instead.")
+        
 
-    # Convert route type to lowercase for consistency
-    route_type_lower = route_type.lower()
+        
+        # Convert route type to lowercase for consistency
+        route_type_lower = route_type.lower()
 
-    if route_type_lower == 'compare routes':
-        folium.PolyLine(bike_geom, color="blue", weight=4, opacity=1).add_to(m)
-        folium.Marker(start_data, popup='Start',
-                      icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
-        folium.Marker(dest_data, popup='Destination', icon = folium.Icon(color='red', icon="flag")).add_to(m)
+        if route_type_lower == 'compare routes' or fallback_to_shortest:
+            folium.PolyLine(bike_geom, color="blue", weight=4, opacity=1).add_to(m)
+            folium.Marker(start_data, popup='Start',
+                        icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
+            folium.Marker(dest_data, popup='Destination', icon = folium.Icon(color='red', icon="flag")).add_to(m)
 
-        # Fetch and display the shortest route
-        folium.PolyLine(route_geom, color="red", weight=4, opacity=0.5).add_to(m)
-    
-    elif route_type_lower == 'bike-friendly route':
-        folium.PolyLine(bike_geom, color="blue", weight=4, opacity=1).add_to(m)
-        folium.Marker(start_data, popup='Start',
-                      icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
-        folium.Marker(dest_data, popup='Destination', icon = folium.Icon(color='red', icon="flag")).add_to(m)
-    else:      
-        # Get the shortest route
-        folium.PolyLine(route_geom, color="blue", weight=4, opacity=1).add_to(m)
-        folium.Marker(start_data, popup='Start',
-                      icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
-        folium.Marker(dest_data, popup='Destination', icon = folium.Icon(color='red', icon="flag")).add_to(m)
+            # Fetch and display the shortest route
+            folium.PolyLine(route_geom, color="red", weight=4, opacity=0.5).add_to(m)
+        
+        elif route_type_lower == 'bike-friendly route' or fallback_to_shortest:
+            folium.PolyLine(bike_geom, color="blue", weight=4, opacity=1).add_to(m)
+            folium.Marker(start_data, popup='Start',
+                        icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
+            folium.Marker(dest_data, popup='Destination', icon = folium.Icon(color='red', icon="flag")).add_to(m)
+        else:      
+            # Get the shortest route
+            folium.PolyLine(route_geom, color="blue", weight=4, opacity=1).add_to(m)
+            folium.Marker(start_data, popup='Start',
+                        icon = folium.Icon(color='green', prefix='fa',icon='bicycle')).add_to(m)
+            folium.Marker(dest_data, popup='Destination', icon = folium.Icon(color='red', icon="flag")).add_to(m)
 
-    # Display the route details
-    if route_type_lower == 'bike-friendly route':
-        st.markdown(f"#### Bike-Friendly Route Details")
-        st.write(f"**Distance:** {round(bike_pathDistance/1000, 2)} km")
-        st.write(f"**Estimated Time Needed:** {round((bike_pathDistance/1000 / 15) * 60)} minutes")
-    elif route_type_lower == 'shortest route':
-        st.markdown(f"#### Shortest Route Details")
-        st.write(f"**Distance:** {round(pathDistance/1000, 2)} km")
-        st.write(f"**Estimated Time Needed:** {round((pathDistance/1000 / 15) * 60)} minutes")
-    elif route_type_lower == 'compare routes':
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"#### Bike-Friendly Route")
+        # Display the route details
+        if route_type_lower == 'bike-friendly route' or fallback_to_shortest:
+            st.markdown(f"#### Bike-Friendly Route Details")
             st.write(f"**Distance:** {round(bike_pathDistance/1000, 2)} km")
             st.write(f"**Estimated Time Needed:** {round((bike_pathDistance/1000 / 15) * 60)} minutes")
-            #st.write(f"**Average Bikeability Score:** {round(bike_score*100, 2)} %")
-            render_score_as_bars(bike_score)
-        with col2:
-            st.markdown(f"#### Shortest Route")
+        elif route_type_lower == 'shortest route':
+            st.markdown(f"#### Shortest Route Details")
             st.write(f"**Distance:** {round(pathDistance/1000, 2)} km")
             st.write(f"**Estimated Time Needed:** {round((pathDistance/1000 / 15) * 60)} minutes")
-            #st.write(f"**Average Bikeability Score:** {round(short_score*100, 2)} %")
-            render_score_as_bars(short_score)
+        elif route_type_lower == 'compare routes' or fallback_to_shortest:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"#### Bike-Friendly Route")
+                st.write(f"**Distance:** {round(bike_pathDistance/1000, 2)} km")
+                st.write(f"**Estimated Time Needed:** {round((bike_pathDistance/1000 / 15) * 60)} minutes")
+                #st.write(f"**Average Bikeability Score:** {round(bike_score*100, 2)} %")
+                render_score_as_bars(bike_score)
+            with col2:
+                st.markdown(f"#### Shortest Route")
+                st.write(f"**Distance:** {round(pathDistance/1000, 2)} km")
+                st.write(f"**Estimated Time Needed:** {round((pathDistance/1000 / 15) * 60)} minutes")
+                #st.write(f"**Average Bikeability Score:** {round(short_score*100, 2)} %")
+                render_score_as_bars(short_score)
+                
+            # Skip before the legend
+            st.markdown('<div style="margin-top: 50px;"></div>', unsafe_allow_html=True)
             
-        # Skip before the legend
-        st.markdown('<div style="margin-top: 50px;"></div>', unsafe_allow_html=True)
+            st.markdown("""
+            <style>
+            .legend {
+                display: flex;
+                align-items: center;
+            }
+            .color-box {
+                width: 12px;
+                height: 12px;
+                margin-right: 5px;
+                border: 1px solid #888;
+            }
+            .blue-box {
+                background-color: blue;
+            }
+            .red-box {
+                background-color: red;
+            }
+            </style>
+            <div class="legend">
+                <div class="color-box blue-box"></div><span>- Bike-friendly Route</span>
+            </div>
+            <div class="legend">
+                <div class="color-box red-box"></div><span>- Shortest Route</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
         
-        st.markdown("""
-        <style>
-        .legend {
-            display: flex;
-            align-items: center;
-        }
-        .color-box {
-            width: 12px;
-            height: 12px;
-            margin-right: 5px;
-            border: 1px solid #888;
-        }
-        .blue-box {
-            background-color: blue;
-        }
-        .red-box {
-            background-color: red;
-        }
-        </style>
-        <div class="legend">
-            <div class="color-box blue-box"></div><span>- Bike-friendly Route</span>
-        </div>
-        <div class="legend">
-            <div class="color-box red-box"></div><span>- Shortest Route</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    
-    # Display the map
-    folium_static(m, width=700)
+        # Display the map
+        folium_static(m, width=700)
     
 else:
     # Display an empty map
