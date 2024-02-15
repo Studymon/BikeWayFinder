@@ -36,7 +36,7 @@ def load_compressed_tensor(filename):
 ################
 
 # Change to the data directory
-os.chdir('../../data')
+os.chdir('../../data_visible')
 
 # Unzip the folder containing the tensors (only need to do this once)
 #zipped_folder_path = 'interim/edges_pred_output.zip'
@@ -61,7 +61,7 @@ centroids_nearest = centroids_nearest.drop(columns=['DBSCAN_group', 'linestring'
 ##################################################
 
 # Import the filenames of the tensors
-edges_pred_output_files = os.listdir('interim/edges_pred_output')
+edges_pred_output_files = os.listdir(f'interim/svi/{place_name.split(',')[0]}/edges_pred_output')
 
 # Extracting non-missing cluster IDs from filenames
 retrieved_cluster_ids = [int(filename.split('_')[1].split('_')[0]) for filename in edges_pred_output_files]
@@ -172,9 +172,9 @@ pd.DataFrame(distances_meters, columns=['Distances']).describe()
 
 ''''
 For Stuttgart, the distribution of distances between missing clusters and their closest clusters is right-skewed,
-The mean distance is 186.4 meters, while the median is 116.2 meters and the standard deviation of 196.6 meters.
+The mean distance is 186.4 meters, while the median is 116.2 meters and the standard deviation is 196.6 meters.
 The maximum distance is 2.7 kilometers, which is extremely high compared to the rest of the distances.
-Given the context of the project, the median seems to be a sensible treshold for deciding
+Given the context of the project, the median seems to be a sensible threshold for deciding
 whether to use the closest cluster's image.
 '''
 

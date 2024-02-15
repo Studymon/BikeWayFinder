@@ -62,7 +62,7 @@ def min_max(x, max_value, min_value=0):
 ################
 
 # Change to the data directory
-os.chdir('../../data')
+os.chdir('../../data_visible')
 
 place_name = "Stuttgart, Germany"
 
@@ -70,7 +70,7 @@ place_name = "Stuttgart, Germany"
 edges_clustered = pd.read_pickle(f"interim/edges_{place_name.split(',')[0]}_clustered.pkl")
 nodes = pd.read_pickle(f"interim/nodes_{place_name.split(',')[0]}.pkl")  # for building the graph G later
 clusters_processed = pd.read_pickle(f"processed/clusters_processed_{place_name.split(',')[0]}.pkl")
-survey_predictions = pd.read_csv(f"processed/new_edges_predictions.csv")
+survey_predictions = pd.read_csv(f"interim/edges_survey_predictions.csv")
 
 # Load pixel classes from Mapillary Vistas dataset
 data = json.load(open('external/config_v1.2.json'))
@@ -91,12 +91,12 @@ for i, label in enumerate(data['labels']):
 ##############################
 
 # Directory where the pred tensors are saved
-pred_output_dir = "interim/edges_pred_output"
+pred_output_dir = f"interim/svi/{place_name.split(',')[0]}/edges_pred_output"
 tensor_files = os.listdir(pred_output_dir)
 
 #### TEST
 # Load in example tensor
-#tensor_path = os.path.join(pred_output_dir, 'edges-cluster_17335_pred.pt.gz')
+#tensor_path = os.path.join(pred_output_dir, 'edges-cluster_21427_pred.pt.gz')
 #pred_tensor = load_compressed_tensor(tensor_path)
 
 # Print how many pixels are there of classes of interest together with its readable label
