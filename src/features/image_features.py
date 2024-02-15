@@ -93,6 +93,8 @@ for i, label in enumerate(data['labels']):
 # Directory where the pred tensors are saved
 pred_output_dir = f"interim/svi/{place_name.split(',')[0]}/edges_pred_output"
 tensor_files = os.listdir(pred_output_dir)
+# Note that using the sample dataset of tensors, you can test the code for getting the image features,
+# but it doesn't make sense to run the rest of the pipeline for the sample dataset as the merging will leave very few edges with data.
 
 #### TEST
 # Load in example tensor
@@ -225,4 +227,5 @@ edges_img_features = edges_clustered_reset.merge(clusters_img_features.rename(co
 edges_img_features.set_index(['u', 'v', 'key'], inplace=True)
 
 # Save the results
-edges_img_features.to_pickle(f"processed/edges_img_features_{place_name.split(',')[0]}.pkl")
+# Only save the results when using the full tensor dataset
+#edges_img_features.to_pickle(f"processed/edges_img_features_{place_name.split(',')[0]}.pkl")

@@ -288,17 +288,17 @@ centroids_nearest = pd.read_pickle(file_path_centroids)
 
 
 ## VISUALIZE CLUSTER MIDPOINTS
-#fig, ax = ox.plot_graph(G, node_size=2, figsize=(60, 60), node_color='r', show=False, close=False) 
+fig, ax = ox.plot_graph(G, node_size=2, figsize=(60, 60), node_color='r', show=False, close=False) 
 
 # Extract representative midpoints
-#representative_midpoints = [row['representative_point'] for idx, row in centroids_nearest.iterrows()]
+representative_midpoints = [row['representative_point'] for idx, row in centroids_nearest1.iterrows()]
 
 # Plot each representative midpoint in green
-#for point in representative_midpoints:
-#    ax.scatter(point.x, point.y, c='green', s=2)
+for point in representative_midpoints:
+    ax.scatter(point.x, point.y, c='green', s=2)
 
 # Show the plot
-#plt.show()
+plt.show()
 
 
 #################################

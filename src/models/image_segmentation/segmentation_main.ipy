@@ -22,12 +22,12 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 os.chdir('../../..')
 
 # Set configuration
-snapshot = "wide_resnet38_deeplab_vistas.pth.tar"
+snapshot = "models/wide_resnet38_deeplab_vistas.pth.tar"  # Trained model must be downloaded from https://github.com/mapillary/inplace_abn
 os.chdir(f'data_visible/interim/svi/{place_name}')  # go to the directory for image segmentation
-data = "sorted_images/class_kept/sampled_edges"  # input directory, imagaes to segment
-output = "sampled_edges_img_output"  # output directory, segmented images
-pred_output = "sampled_edges_pred_output"  # output directory, tensor containing class prediction per pixel
-prob_output = "sampled_edges_prob_output"  # output directory, tensor containing class probabilities per pixel
+data = "sorted_images/class_kept"  # input directory, imagaes to segment
+output = "edges_img_output"  # output directory, segmented images
+pred_output = "edges_pred_output"  # output directory, tensor containing class prediction per pixel
+prob_output = "edges_prob_output"  # output directory, tensor containing class probabilities per pixel
 scales = "[1, 2, 2.7, 3.5]"  # scales used for multi-scale inference
 do_flip = False  # whether to use horizontal flip for inference (False for now, as it doubles the inference time without significant improvement in accuracy)
 output_mode = "palette"

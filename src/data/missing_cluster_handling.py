@@ -35,17 +35,20 @@ def load_compressed_tensor(filename):
 #### Preparation
 ################
 
+place_name = "Stuttgart, Germany"
+
 # Change to the data directory
-os.chdir('../../data_visible')
+os.chdir('../..')
 
 # Unzip the folder containing the tensors (only need to do this once)
-#zipped_folder_path = 'interim/edges_pred_output.zip'
-#unzip_destination = 'interim'
+#zipped_folder_path = f"data/interim/svi/{place_name.split(',')[0]}/edges_pred_output.zip"
+#unzip_destination = f"data/interim/svi/{place_name.split(',')[0]}"
 
 #with zipfile.ZipFile(zipped_folder_path, 'r') as zip_ref:
 #    zip_ref.extractall(unzip_destination)
 
-place_name = "Stuttgart, Germany"
+# Change to the data directory
+os.chdir('data_visible')
 
 # Import the clustered edges and cluster information [see src/features/svi_extraction.py]
 edges_clustered = pd.read_pickle(f"interim/edges_{place_name.split(',')[0]}_clustered.pkl")
@@ -61,7 +64,10 @@ centroids_nearest = centroids_nearest.drop(columns=['DBSCAN_group', 'linestring'
 ##################################################
 
 # Import the filenames of the tensors
-edges_pred_output_files = os.listdir(f'interim/svi/{place_name.split(',')[0]}/edges_pred_output')
+# NOTE: This step requires the full tensor data set
+os.chdir('../data')
+edges_pred_output_files = os.listdir(f"interim/svi/{place_name.split(',')[0]}/edges_pred_output")
+os.chdir('../data_visible')
 
 # Extracting non-missing cluster IDs from filenames
 retrieved_cluster_ids = [int(filename.split('_')[1].split('_')[0]) for filename in edges_pred_output_files]
@@ -205,4 +211,4 @@ for i, row in centroids_nearest.iterrows():
 centroids_nearest['implied_cluster_id'].isna().sum()
 
 # Write the updated dataframe to a file
-centroids_nearest.to_pickle(f"processed/clusters_processed_{place_name.split(',')[0]}.pkl")
+#centroids_nearest.to_pickle(f"processed/clusters_processed_{place_name.split(',')[0]}.pkl")
