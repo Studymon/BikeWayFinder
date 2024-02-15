@@ -19,47 +19,48 @@ please see `combined_scores.py` in the `src` folder.
 
 ## Project Organization
 
-├── README.md          <- The top-level README for developers using this project.
-│
-├── data_visible
-│   │
-│   ├── external       <- Data from third party sources.
-│   ├── interim        <- Intermediate data that has been transformed.
-│   ├── processed      <- The final, canonical data sets for modeling.
-│   └── raw            <- The original, immutable data dump.
-│
-├── models             <- Trained models / link to used models
-│
-├── notebooks          <- Jupyter notebooks (mainly containing deep learning scripts outsourced to Google Colab).
-│
-├── references         <- Literature
-│
-├── src                <- Source code for use in this project.
-│   │
-│   ├── data           <- Scripts to download or generate data
-│   │   │
-│   │   ├── image_sampling.py
-│   │   ├── missing_cluster_handling.py
-│   │   └── svi_extraction.py
-│   │
-│   ├── features       <- Scripts to turn raw data into features for modeling and deployment
-│   │   │
-│   │   ├── elevation.py
-│   │   ├── image_features.py
-│   │   └── osm_features_extraction.py
-│   │
-│   ├── models         <- Scripts to train models and then use trained models to make predictions
-│   │   │                 
-│   │   ├── survey_model.py
-│   │   │
-│   │   └── image_segmentation <- Contains script and custom packages for image segmentation of SVI
-│   │
-│   └── combined_scores.py
-│
-│
-├── requirements.txt   <- The requirements file for hosting the App on Streamlit
-│
-└── all_requirements.txt   <- The requirements file for reproducing the entire analysis environment
+
+    ├── README.md          <- The top-level README for developers using this   project.
+    │
+    ├── data_visible
+    │   │
+    │   ├── external       <- Data from third party sources.
+    │   ├── interim        <- Intermediate data that has been transformed.
+    │   ├── processed      <- The final, canonical data sets for modeling.
+    │   └── raw            <- The original, immutable data dump.
+    │
+    ├── models             <- Trained models / link to used models
+    │
+    ├── notebooks          <- Jupyter notebooks (mainly containing deep learning   scripts outsourced to Google Colab).
+    │
+    ├── references         <- Literature
+    │
+    ├── src                <- Source code for use in this project.
+    │   │
+    │   ├── data           <- Scripts to download or generate data
+    │   │   │
+    │   │   ├── image_sampling.py
+    │   │   ├── missing_cluster_handling.py
+    │   │   └── svi_extraction.py
+    │   │
+    │   ├── features       <- Scripts to turn raw data into features for   modeling and deployment
+    │   │   │
+    │   │   ├── elevation.py
+    │   │   ├── image_features.py
+    │   │   └── osm_features_extraction.py
+    │   │
+    │   ├── models         <- Scripts to train models and then use trained   models to make predictions
+    │   │   │                 
+    │   │   ├── survey_model.py
+    │   │   │
+    │   │   └── image_segmentation <- Contains script and custom packages for   image segmentation of SVI
+    │   │
+    │   └── combined_scores.py
+    │
+    │
+    ├── requirements.txt   <- The requirements file for hosting the App on   Streamlit
+    │
+    └── all_requirements.txt   <- The requirements file for reproducing the   entire analysis environment
 
 ## Execution Guide
 
