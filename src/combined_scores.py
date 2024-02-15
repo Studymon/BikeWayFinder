@@ -71,7 +71,7 @@ features = features[~features['highway'].apply(contains_excluded_road_type)]
 ##########################################
 
 # Function to calculate the raw scores from extracted features
-def calculate_feature_score(row):
+def calculate_accessibility_score(row):
     osm_score = 0
     if row['bicycle_parking'] == 1:
         osm_score += 1
@@ -109,15 +109,15 @@ def road_type_to_score(road_type):
 
 # Function to map pavement type to score
 def pavement_type_to_score(surface):
-    if re.search(r'asphalt|paved|concrete|concrete:plates', surface):
+    if re.search(r'asphalt|paved|concrete|concrete:plates|concrete:lanes', surface):
         return 1
     elif re.search(r'paving_stones|sett|fine_gravel|compacted|gravel', surface):
         return 0.8
-    elif re.search(r'ground|clay|artificial_turf', surface):
+    elif re.search(r'ground|clay|artificial_turf|grass_paver', surface):
         return 0.6
-    elif re.search(r'grass|dirt|earth', surface):
+    elif re.search(r'grass|dirt|earth|sand|mud', surface):
         return 0.3
-    elif re.search(r'cobblestone|unpaved', surface):
+    elif re.search(r'cobblestone|unpaved|limestone|pebblestone', surface):
         return 0.1
     else:
         return np.nan
@@ -174,7 +174,7 @@ def obj_detection_score(row):
 ##########################################    
     
 # Calculate osm scores
-features['featureScore'] = features.apply(calculate_feature_score, axis=1)
+features['accessibilityScore'] = features.apply(calculate_accessibility_score, axis=1)
 features['roadTypeScore'] = features['highway'].astype(str).apply(road_type_to_score)
 features['pavementTypeScore'] = features['pavement'].astype(str).apply(pavement_type_to_score)
 features['widthScore'] = features['width'].apply(width_score)
@@ -197,7 +197,7 @@ features.rename(columns={'survey_score_prediction': 'surveyScore'}, inplace=True
 
 # Define the weights for each factor based on their importance
 BASELINE_WEIGHTS = {
-    'featureScore': 5,
+    'accessibilityScore': 5,
     'roadTypeScore': 15,
     'pavementTypeScore': 10,
     'widthScore': 5,
@@ -209,7 +209,7 @@ BASELINE_WEIGHTS = {
 }
 
 NATURE_WEIGHTS = {
-    'featureScore': 5,
+    'accessibilityScore': 5,
     'roadTypeScore': 5,
     'pavementTypeScore': 5,
     'widthScore': 0,
@@ -221,7 +221,7 @@ NATURE_WEIGHTS = {
 }
 
 PERCEPTION_WEIGHTS = {
-    'featureScore': 0,
+    'accessibilityScore': 0,
     'roadTypeScore': 10,
     'pavementTypeScore': 10,
     'widthScore': 0,
