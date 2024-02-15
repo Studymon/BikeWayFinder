@@ -1,0 +1,32 @@
+# These are all the requirements for for reproducing the analysis environment
+# requirements.txt contain ONLY requirements needed for the app hosted on Streamlit
+
+numpy
+pandas
+geopandas
+os
+pathlib
+shutil
+random
+matplotlib
+seaborn
+osmnx
+networknx
+shapely
+scipy
+gzip
+io 
+torch
+torchvision
+scikit-learn
+math
+requests
+time
+PIL
+rasterio
+re
+json
+tqdm
+folium
+streamlit
+streamlit_folium
