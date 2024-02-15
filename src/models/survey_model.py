@@ -22,6 +22,15 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
+'''
+Note that the survey model training was outsourced to Google Colab.
+This script is only for the purpose of demonstrating the process.
+All ouptputs, visualizations & sanity checks can be found 
+in 'notebooks/survey_model_quality.ipynb'.
+'''
+
+
+
 #################################
 ## SET PATHS
 #################################
@@ -47,6 +56,8 @@ def preprocess(data):
     data = data.drop(data.columns[819:], axis=1)
     # Replace all -77 with NaN
     data = data.replace(-77, np.nan)
+    # Replace all 0 with NaN (all survey answers begin at 1)
+    data = data.replace(0, np.nan)
 
     # Reshaping the data
     # Identify all v_66_... columns
@@ -495,7 +506,7 @@ plt.tight_layout()
 plt.show()
 
 # Plotting images with highest scores
-filtered_rows = results_new[(results_new['Prediction'] > 4.8)]
+filtered_rows = results_new[(results_new['Prediction'] > 4.5)]
 image_filenames = filtered_rows['Filename']
 
 plt.figure(figsize=(20, num_rows * 4))

@@ -2,13 +2,19 @@ import os
 import shutil
 import random
 
+'''
+This script samples 1000 images from the 'edges' folder and creates a .csv file for importing the images in Tivian.
+Only done once to create the .csv file.
+Only makes sense to execute on the full dataset.
+'''
+
 # Preparation
 random.seed(0)
-os.chdir('c:\\Users\\andre\\iCloudDrive\\Dokumente\\Master Data Science\\3. Semester (WS 23)\\DS500-Data_Science_Project\\BikeWayFinder\\data')
+os.chdir('../../data')  # Sampling images from the data directory containing all images
 
 # Source and destination folders
-source_folder = 'streetview_images/Stuttgart/edges'
-destination_folder = 'streetview_images/Stuttgart/sampled_edges'
+source_folder = 'raw/svi/Stuttgart/edges'
+destination_folder = 'raw/svi/Stuttgart/sampled_edges'
 
 # Create the destination folder if it doesn't exist
 os.makedirs(destination_folder, exist_ok=True)
@@ -20,10 +26,10 @@ image_files = [file for file in os.listdir(source_folder) if file.endswith(('.jp
 num_samples = min(1000, len(image_files))
 sampled_images = random.sample(image_files, num_samples)
 
-#for image in sampled_images:
-#    source_path = os.path.join(source_folder, image)
-#    destination_path = os.path.join(destination_folder, image)
-#    shutil.copy(source_path, destination_path)
+for image in sampled_images:
+    source_path = os.path.join(source_folder, image)
+    destination_path = os.path.join(destination_folder, image)
+    shutil.copy(source_path, destination_path)
     
     
 #### Create .csv for Tivian
@@ -41,7 +47,7 @@ csv_lines = [f"{int(file_name.split('_')[-1].split('.')[0])};{index + 1};{file_n
 csv_lines[:5]
 
 # Write the CSV file
-csv_file_path = "streetview_images/Stuttgart/sampled_edges.csv"  # replace with your desired file path
+csv_file_path = "raw/svi/Stuttgart/sampled_edges.csv"  # Path to the CSV file
 with open(csv_file_path, 'w') as file:
     for line in csv_lines:
         file.write(line + '\n')

@@ -1,0 +1,5 @@
+GitHub Repository (scroll down to "Usage for Semantic Segmentation on Cityscapes and Mapillary Vistas"):
+https://github.com/mapillary/inplace_abn
+
+Direct Download Link to Trained Model:
+https://drive.google.com/file/d/1SJJx5-LFG3J3M99TrPMU-z6ZmgWynxo-/view
