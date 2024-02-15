@@ -135,11 +135,11 @@ G = ox.graph_from_place(place_name, network_type='bike', simplify=True)
 nodes, edges = ox.graph_to_gdfs(G, nodes=True, edges=True)
 
 # Change to the data directory
-os.chdir('../../data')
+os.chdir('../../data_visible')
 
 
 """ Note on building the street network:
-The clustering and therefore image retrieval for Stuttgart was based on an interims version of
+The clustering and therefore image retrieval for Stuttgart was based on an interim version of
 `edges`, which can be recreated with the commented-out section A, using the GeoDataFrame
 `osm_scores_no_highways.pkl` as edges.
 
@@ -149,7 +149,7 @@ Section B allows to cluster the edges and retrieve images for a city of choice, 
 # Section A
 ###########
 # Load the cleaned edges as GeoDataFrame from pickle file
-#edges = pd.read_pickle('processed/osm_scores_no_highways.pkl')
+#edges = pd.read_pickle('interim/osm_scores_no_highways.pkl')
 # Create the network with the cleaned edges
 #G = ox.graph_from_gdfs(nodes, edges)
 
@@ -283,8 +283,8 @@ centroids_nearest.to_pickle(file_path_centroids)
 ## Import
 
 # Import `edges` from the pickle file
-edges_imported = pd.read_pickle(file_path_edges)
-centroids_nearest_imported = pd.read_pickle(file_path_centroids)
+edges = pd.read_pickle(file_path_edges)
+centroids_nearest = pd.read_pickle(file_path_centroids)
 
 
 ## VISUALIZE CLUSTER MIDPOINTS
@@ -309,7 +309,7 @@ centroids_nearest_imported = pd.read_pickle(file_path_centroids)
 os.getcwd()  # verify current working directory is data
  
 # Before we start, create the directory to store the images
-os.makedirs(f"streetview_images/{place_name.split(',')[0]}/edges", exist_ok=True) 
+os.makedirs(f"raw/svi/{place_name.split(',')[0]}/edges", exist_ok=True) 
   
 # source the Google Streetview API key from separate hidden script
 with open("./api_keys/svi_api_key_sa.py") as script:
@@ -364,5 +364,5 @@ for idx, row in centroids_nearest.iterrows():
 
 image_retrieval_log = pd.DataFrame(image_retrieval_data)
 
-log_file_path = "./log_files/edges_svi_retrieval_log.csv"
+log_file_path = "./interim/edges_svi_retrieval_log.csv"
 image_retrieval_log.to_csv(log_file_path, index=False)
