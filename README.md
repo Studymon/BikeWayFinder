@@ -8,7 +8,7 @@ road type (e.g. highways, residentail roads, etc.), pavement type, road length, 
 
 2) Retrieve elevation data from NASA Earthdata
 
-3) Using API to scrape Street View Images (SVI) from Google Maps, and exploit deep learning models to segment features such as greenery and vehicle frequencies, and to detect features
+3) Using API to retrieve Street View Images (SVI) from Google Maps, and exploit deep learning models to segment features such as greenery and vehicle frequencies, and to detect features
 such as street lights and rail tracks
 
 4) Set up survey to determine subjective perception of bicycle-friendliness of a specific SVI
@@ -20,7 +20,7 @@ please see `combined_scores.py` in the `src` folder.
 ## Project Organization
 
 
-    ├── README.md          <- The top-level README for developers using this   project.
+    ├── README.md          <- The top-level README for developers using this project.
     │
     ├── data_visible
     │   │
@@ -31,7 +31,7 @@ please see `combined_scores.py` in the `src` folder.
     │
     ├── models             <- Trained models / link to used models
     │
-    ├── notebooks          <- Jupyter notebooks (mainly containing deep learning   scripts outsourced to Google Colab).
+    ├── notebooks          <- Jupyter notebooks (mainly containing deep learning scripts outsourced to Google Colab).
     │
     ├── references         <- Literature
     │
@@ -43,24 +43,24 @@ please see `combined_scores.py` in the `src` folder.
     │   │   ├── missing_cluster_handling.py
     │   │   └── svi_extraction.py
     │   │
-    │   ├── features       <- Scripts to turn raw data into features for   modeling and deployment
+    │   ├── features       <- Scripts to turn raw data into features for modeling and deployment
     │   │   │
     │   │   ├── elevation.py
     │   │   ├── image_features.py
     │   │   └── osm_features_extraction.py
     │   │
-    │   ├── models         <- Scripts to train models and then use trained   models to make predictions
+    │   ├── models         <- Scripts to train models and then use trained models to make predictions
     │   │   │                 
     │   │   ├── survey_model.py
     │   │   │
-    │   │   └── image_segmentation <- Contains script and custom packages for   image segmentation of SVI
+    │   │   └── image_segmentation <- Contains script and custom packages for image segmentation of SVI
     │   │
     │   └── combined_scores.py
     │
     │
-    ├── requirements.txt   <- The requirements file for hosting the App on   Streamlit
+    ├── requirements.txt   <- The requirements file for hosting the App on Streamlit
     │
-    └── all_requirements.txt   <- The requirements file for reproducing the   entire analysis environment
+    └── all_requirements.txt   <- The requirements file for reproducing the entire analysis environment
 
 ## Execution Guide
 
