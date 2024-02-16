@@ -160,7 +160,9 @@ def render_score_as_bars(score):
 # App layout
 APP_TITLE = 'BikeWayFinder'
 APP_SUBTITLE = 'Find the best way by bike from A to B'
-st.title(APP_TITLE)
+
+
+st.title(APP_TITLE)  
 st.caption(APP_SUBTITLE)
 
 # Input for start/dest location
@@ -214,9 +216,19 @@ if st.button('Find Route'):
         fallback_to_shortest = bikeable_route is None
         
         if not fallback_to_shortest:
-            # If we have a bikeable route, use it
-            bike_geom = [(G_bike.nodes[node]['y'], G_bike.nodes[node]['x']) for node in bikeable_route]
-            bike_score = calculate_bikeability_score(G_bike, bikeable_route, weight_param)
+            
+            try:
+                # Attempt to generate the bike route geometry
+                bike_geom = [(G_bike.nodes[node]['y'], G_bike.nodes[node]['x']) for node in bikeable_route]
+                bike_score = calculate_bikeability_score(G_bike, bikeable_route, weight_param)
+            except Exception as e:
+                # If an error occurs, fallback to the shortest route geometry
+                bike_geom = route_geom  
+                bike_pathDistance = pathDistance 
+                bike_score = short_score
+                # Optionally, log the error or inform the user
+                st.error("Failed to display part of bicycle-friendly route. Displaying the shortest route instead.")
+
         else:
             # If no bikeable route, fallback to shortest and consider its score
             bike_geom = route_geom  
@@ -236,8 +248,16 @@ if st.button('Find Route'):
         if bike_score < short_score:
             prefer_bike_route = False
         # Check if bikeability score for the bike route is within 2 percentage points of the shortest route
-        # and the time needed is longer by more than 5 minutes
-        elif abs(bike_score - short_score) <= 0.02 and (bike_time_estimated - shortest_time_estimated) > 5:
+        # and the time needed is longer by more than 20%
+        elif abs(bike_score - short_score) <= 0.02 and ((bike_time_estimated - shortest_time_estimated) / shortest_time_estimated) > 0.2:
+            prefer_bike_route = False
+        # Check if bikeability score for the bike route is within 5 percentage points of the shortest route
+        # and the time needed is longer by more than 50%
+        elif abs(bike_score - short_score) <= 0.05 and ((bike_time_estimated - shortest_time_estimated) / shortest_time_estimated) > 0.5:
+            prefer_bike_route = False
+        # Check if bikeability score for the bike route is within 20 percentage points of the shortest route
+        # and the time needed is longer by more than 100%
+        elif abs(bike_score - short_score) <= 0.20 and ((bike_time_estimated - shortest_time_estimated) / shortest_time_estimated) > 1.0:
             prefer_bike_route = False
             
         # Based on the decision, adjust the route to be used for display and further calculations
